@@ -1,10 +1,9 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { Book, Calendar, ShoppingCart, Settings, Plus } from 'lucide-react';
+import { Book, Calendar, ShoppingCart, Settings } from 'lucide-react';
 import styles from './AppLayout.module.css';
 
 const navItems = [
   { to: '/', icon: Book, label: 'Recipes' },
-  { to: '/recipes/new', icon: Plus, label: 'Add Recipe' },
   { to: '/calendar', icon: Calendar, label: 'Calendar' },
   { to: '/shopping', icon: ShoppingCart, label: 'Shopping' },
   { to: '/settings', icon: Settings, label: 'Settings' },

@@ -1,24 +1,28 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { Button, Input, Card, CardBody } from '@/components/ui';
+import { ImageGallery, ImageUploader } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
-import type { Tag, Ingredient } from '@/types';
+import type { Tag, Ingredient, RecipeImage } from '@/types';
 import { UNIT_INFO } from '@/types/units';
+import { DEFAULT_STORE_SECTIONS } from '@/types';
 import styles from './RecipeFormPage.module.css';
 
 const emptyIngredient: Omit<Ingredient, 'id'> = {
   name: '',
   quantity: null,
   unit: null,
-  preparationNotes: '',
   isOptional: false,
+  storeSection: 'other',
 };
 
 export function RecipeFormPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEditing = Boolean(id);
+  const isImporting = searchParams.get('imported') === 'true';
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -31,9 +35,12 @@ export function RecipeFormPage() {
   const [prepTime, setPrepTime] = useState<number | ''>('');
   const [cookTime, setCookTime] = useState<number | ''>('');
   const [sourceUrl, setSourceUrl] = useState('');
-  const [sourceReference, setSourceReference] = useState('');
+  const [referenceCookbook, setReferenceCookbook] = useState('');
+  const [referencePageNumber, setReferencePageNumber] = useState<number | ''>('');
+  const [referenceOther, setReferenceOther] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [images, setImages] = useState<RecipeImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -44,6 +51,7 @@ export function RecipeFormPage() {
         setAvailableTags(tags);
 
         if (id) {
+          // Editing existing recipe
           const recipe = await recipeRepository.getById(id);
           if (recipe) {
             setTitle(recipe.title);
@@ -55,8 +63,38 @@ export function RecipeFormPage() {
             setPrepTime(recipe.prepTimeMinutes || '');
             setCookTime(recipe.cookTimeMinutes || '');
             setSourceUrl(recipe.sourceUrl || '');
-            setSourceReference(recipe.sourceReference || '');
+            setReferenceCookbook(recipe.referenceCookbook || '');
+            setReferencePageNumber(recipe.referencePageNumber || '');
+            setReferenceOther(recipe.referenceOther || '');
             setSelectedTags(recipe.tags);
+            setImages(recipe.images || []);
+          }
+        } else if (isImporting) {
+          // Loading imported recipe from sessionStorage
+          const importedData = sessionStorage.getItem('importedRecipe');
+          if (importedData) {
+            try {
+              const imported = JSON.parse(importedData);
+              setTitle(imported.title || '');
+              setDescription(imported.description || '');
+              if (imported.ingredients && imported.ingredients.length > 0) {
+                setIngredients(imported.ingredients);
+              }
+              setInstructions(imported.instructions || '');
+              setNotes(imported.notes || '');
+              setServings(imported.servings || 4);
+              setPrepTime(imported.prepTimeMinutes || '');
+              setCookTime(imported.cookTimeMinutes || '');
+              setSourceUrl(imported.sourceUrl || '');
+              setReferenceCookbook(imported.referenceCookbook || '');
+              setReferencePageNumber(imported.referencePageNumber || '');
+              setReferenceOther(imported.referenceOther || '');
+              setSelectedTags(imported.tags || []);
+              // Clear the imported data from sessionStorage
+              sessionStorage.removeItem('importedRecipe');
+            } catch (e) {
+              console.error('Failed to parse imported recipe:', e);
+            }
           }
         }
       } catch (error) {
@@ -67,7 +105,7 @@ export function RecipeFormPage() {
     };
 
     loadData();
-  }, [id]);
+  }, [id, isImporting]);
 
   const handleAddIngredient = () => {
     setIngredients([...ingredients, { ...emptyIngredient }]);
@@ -95,6 +133,14 @@ export function RecipeFormPage() {
     }
   };
 
+  const handleAddImage = useCallback((image: RecipeImage) => {
+    setImages((prev) => [...prev, image]);
+  }, []);
+
+  const handleDeleteImage = useCallback((imageId: string) => {
+    setImages((prev) => prev.filter((img) => img.id !== imageId));
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -118,8 +164,11 @@ export function RecipeFormPage() {
         prepTimeMinutes: prepTime || null,
         cookTimeMinutes: cookTime || null,
         sourceUrl: sourceUrl.trim(),
-        sourceReference: sourceReference.trim(),
+        referenceCookbook: referenceCookbook.trim(),
+        referencePageNumber: referencePageNumber || null,
+        referenceOther: referenceOther.trim(),
         nutrition: null,
+        images,
       };
 
       if (isEditing && id) {
@@ -248,15 +297,19 @@ export function RecipeFormPage() {
                     onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
                     className={styles.nameInput}
                   />
-                  <input
-                    type="text"
-                    placeholder="Prep notes"
-                    value={ingredient.preparationNotes || ''}
+                  <select
+                    value={ingredient.storeSection || 'other'}
                     onChange={(e) =>
-                      handleIngredientChange(index, 'preparationNotes', e.target.value)
+                      handleIngredientChange(index, 'storeSection', e.target.value)
                     }
-                    className={styles.prepInput}
-                  />
+                    className={styles.sectionSelect}
+                  >
+                    {DEFAULT_STORE_SECTIONS.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.name}
+                      </option>
+                    ))}
+                  </select>
                   <Button
                     type="button"
                     variant="ghost"
@@ -332,6 +385,22 @@ export function RecipeFormPage() {
         <Card>
           <CardBody>
             <div className={styles.formSection}>
+              <h2 className={styles.sectionTitle}>Images</h2>
+              {images.length > 0 && (
+                <ImageGallery
+                  images={images}
+                  editable
+                  onDelete={handleDeleteImage}
+                />
+              )}
+              <ImageUploader onImageAdd={handleAddImage} />
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardBody>
+            <div className={styles.formSection}>
               <h2 className={styles.sectionTitle}>Source</h2>
               <Input
                 label="URL"
@@ -341,11 +410,27 @@ export function RecipeFormPage() {
                 placeholder="https://..."
                 fullWidth
               />
+              <div className={styles.row}>
+                <Input
+                  label="Cookbook"
+                  value={referenceCookbook}
+                  onChange={(e) => setReferenceCookbook(e.target.value)}
+                  placeholder="Cookbook name"
+                />
+                <Input
+                  label="Page"
+                  type="number"
+                  min={1}
+                  value={referencePageNumber}
+                  onChange={(e) => setReferencePageNumber(e.target.value ? parseInt(e.target.value, 10) : '')}
+                  placeholder="Page #"
+                />
+              </div>
               <Input
-                label="Reference"
-                value={sourceReference}
-                onChange={(e) => setSourceReference(e.target.value)}
-                placeholder="Cookbook name, page number, etc."
+                label="Other Reference"
+                value={referenceOther}
+                onChange={(e) => setReferenceOther(e.target.value)}
+                placeholder="Magazine, family recipe, etc."
                 fullWidth
               />
             </div>

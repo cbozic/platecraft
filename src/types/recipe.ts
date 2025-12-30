@@ -42,7 +42,10 @@ export interface Recipe {
   prepTimeMinutes?: number;
   cookTimeMinutes?: number;
   sourceUrl?: string;
-  sourceReference?: string; // For cookbook citations
+  // Reference fields for cookbook citations
+  referenceCookbook?: string;
+  referencePageNumber?: number;
+  referenceOther?: string;
   nutrition?: NutritionInfo;
   isFavorite: boolean;
   createdAt: Date;
@@ -60,6 +63,9 @@ export interface RecipeFormData {
   prepTimeMinutes: number | null;
   cookTimeMinutes: number | null;
   sourceUrl: string;
-  sourceReference: string;
+  referenceCookbook: string;
+  referencePageNumber: number | null;
+  referenceOther: string;
   nutrition: NutritionInfo | null;
+  images?: RecipeImage[];
 }

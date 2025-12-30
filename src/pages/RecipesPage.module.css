@@ -18,6 +18,11 @@
   margin: 0;
 }
 
+.headerActions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
 .toolbar {
   display: flex;
   align-items: center;

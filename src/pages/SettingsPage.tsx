@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { Button, Card, CardHeader, CardBody, Modal, ModalFooter } from '@/components/ui';
 import { TagManager } from '@/components/settings';
 import { settingsRepository } from '@/db';
 import { dataService, type ImportResult } from '@/services';
-import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport } from '@/types';
+import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport, AiParsingMode } from '@/types';
 import styles from './SettingsPage.module.css';
 
 export function SettingsPage() {
@@ -31,6 +31,11 @@ export function SettingsPage() {
   const [clearModalOpen, setClearModalOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
+  // API key state
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+
   const loadData = useCallback(async () => {
     try {
       const [settingsData, stats] = await Promise.all([
@@ -39,6 +44,10 @@ export function SettingsPage() {
       ]);
       setSettings(settingsData);
       setDataStats(stats);
+      // Initialize API key input with masked value if key exists
+      if (settingsData.anthropicApiKey) {
+        setApiKeyInput(settingsData.anthropicApiKey);
+      }
     } catch (error) {
       console.error('Failed to load settings:', error);
     } finally {
@@ -67,6 +76,28 @@ export function SettingsPage() {
     if (!settings) return;
     await settingsRepository.setCalendarStartDay(day);
     setSettings({ ...settings, calendarStartDay: day });
+  };
+
+  const handleSaveApiKey = async () => {
+    if (!settings) return;
+    const trimmedKey = apiKeyInput.trim();
+    await settingsRepository.setAnthropicApiKey(trimmedKey || undefined);
+    setSettings({ ...settings, anthropicApiKey: trimmedKey || undefined });
+    setApiKeySaved(true);
+    setTimeout(() => setApiKeySaved(false), 2000);
+  };
+
+  const handleClearApiKey = async () => {
+    if (!settings) return;
+    await settingsRepository.setAnthropicApiKey(undefined);
+    setSettings({ ...settings, anthropicApiKey: undefined });
+    setApiKeyInput('');
+  };
+
+  const handleImportModeChange = async (mode: AiParsingMode) => {
+    if (!settings) return;
+    await settingsRepository.setPreferredImportMode(mode);
+    setSettings({ ...settings, preferredImportMode: mode });
   };
 
   const handleExport = async () => {
@@ -291,6 +322,78 @@ export function SettingsPage() {
           </CardHeader>
           <CardBody>
             <TagManager />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className={styles.sectionTitle}>Recipe Import</h2>
+          </CardHeader>
+          <CardBody>
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <h3 className={styles.settingLabel}>Anthropic API Key</h3>
+                <p className={styles.settingDescription}>
+                  Optional. Enables automatic recipe parsing when importing. Your key is stored
+                  locally and only sent to Anthropic.
+                </p>
+              </div>
+              <div className={styles.apiKeyControl}>
+                <div className={styles.apiKeyInputRow}>
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="sk-ant-..."
+                    className={styles.apiKeyInput}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className={styles.apiKeyToggle}
+                    aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                  >
+                    {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <div className={styles.apiKeyActions}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveApiKey}
+                    disabled={!apiKeyInput.trim()}
+                  >
+                    {apiKeySaved ? 'Saved!' : 'Save Key'}
+                  </Button>
+                  {settings?.anthropicApiKey && (
+                    <Button variant="ghost" size="sm" onClick={handleClearApiKey}>
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <h3 className={styles.settingLabel}>Default Import Mode</h3>
+                <p className={styles.settingDescription}>
+                  Choose how recipes are parsed when importing
+                </p>
+              </div>
+              <div className={styles.settingControl}>
+                <select
+                  value={settings.preferredImportMode || 'manual'}
+                  onChange={(e) => handleImportModeChange(e.target.value as AiParsingMode)}
+                  className={styles.select}
+                >
+                  <option value="manual">Manual (copy/paste to Claude)</option>
+                  <option value="api" disabled={!settings.anthropicApiKey}>
+                    Automatic (requires API key)
+                  </option>
+                </select>
+              </div>
+            </div>
           </CardBody>
         </Card>
 

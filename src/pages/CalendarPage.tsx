@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui';
 import { CalendarGrid, WeekView, RecipePicker } from '@/components/calendar';
 import { useCalendar } from '@/hooks';
-import type { PlannedMeal } from '@/types';
+import type { PlannedMeal, MealExtraItem } from '@/types';
 import styles from './CalendarPage.module.css';
 
 export function CalendarPage() {
@@ -65,8 +65,8 @@ export function CalendarPage() {
   );
 
   const handleRecipeSelect = useCallback(
-    async (recipeId: string, servings: number) => {
-      await addMeal(pickerDate, pickerSlotId, recipeId, servings);
+    async (recipeId: string, servings: number, notes?: string, extraItems?: MealExtraItem[]) => {
+      await addMeal(pickerDate, pickerSlotId, recipeId, servings, notes, extraItems);
     },
     [addMeal, pickerDate, pickerSlotId]
   );

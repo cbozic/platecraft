@@ -1,6 +1,7 @@
 import type { UnitSystem } from './units';
 import type { MealSlot } from './mealPlan';
 import type { StoreSectionInfo } from './shopping';
+import type { AiParsingMode } from './import';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type CalendarStartDay = 0 | 1; // 0 = Sunday, 1 = Monday
@@ -24,6 +25,10 @@ export interface UserSettings {
 
   // Daily nutritional goals (optional)
   dailyCalorieGoal?: number;
+
+  // Recipe Import Settings
+  anthropicApiKey?: string; // Stored locally, never sent anywhere except Anthropic
+  preferredImportMode?: AiParsingMode; // 'api' or 'manual'
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {

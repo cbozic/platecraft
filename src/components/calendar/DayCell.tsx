@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { Plus, X, GripVertical } from 'lucide-react';
+import { Plus, X, GripVertical, StickyNote } from 'lucide-react';
 import type { CalendarDay } from '@/utils/calendar';
 import type { PlannedMeal, MealSlot } from '@/types';
 import styles from './DayCell.module.css';
+
+const hasNotesOrExtras = (meal: PlannedMeal): boolean => {
+  return !!(meal.notes || (meal.extraItems && meal.extraItems.length > 0));
+};
 
 interface DayCellProps {
   day: CalendarDay;
@@ -123,13 +127,19 @@ export function DayCell({
           const isDropTarget = dragOverSlot === slot.id;
 
           if (compact) {
-            // In compact mode (month view), show draggable dots
+            // In compact mode (month view), show meal labels with names
             if (meal && recipe) {
+              const mealHasExtras = hasNotesOrExtras(meal);
+              const titleParts = [`${slot.name}: ${recipe.title}`];
+              if (meal.notes) titleParts.push(`Notes: ${meal.notes}`);
+              if (meal.extraItems?.length) {
+                titleParts.push(`Extras: ${meal.extraItems.map(e => e.name).join(', ')}`);
+              }
               return (
                 <div
                   key={slot.id}
-                  className={styles.mealDot}
-                  title={`${slot.name}: ${recipe.title}`}
+                  className={styles.mealLabel}
+                  title={titleParts.join('\n')}
                   draggable={!!onMoveMeal}
                   onDragStart={(e) => handleDragStart(e, meal)}
                   onDragEnd={handleDragEnd}
@@ -137,13 +147,18 @@ export function DayCell({
                     e.stopPropagation();
                     onMealClick(meal);
                   }}
-                />
+                >
+                  <span className={styles.mealDot} />
+                  <span className={styles.mealName}>{recipe.title}</span>
+                  {mealHasExtras && <StickyNote size={10} className={styles.notesIndicator} />}
+                </div>
               );
             }
             return null;
           }
 
           // Full view (week view)
+          const mealHasExtras = meal ? hasNotesOrExtras(meal) : false;
           return (
             <div
               key={slot.id}
@@ -170,6 +185,11 @@ export function DayCell({
                     </span>
                   )}
                   <span className={styles.mealTitle}>{recipe.title}</span>
+                  {mealHasExtras && (
+                    <span className={styles.notesIndicatorWeek} title={meal.notes || 'Has extras'}>
+                      <StickyNote size={12} />
+                    </span>
+                  )}
                   <button
                     className={styles.removeButton}
                     onClick={(e) => {

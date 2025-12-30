@@ -1,3 +1,6 @@
+import type { MeasurementUnit } from './units';
+import type { StoreSection } from './shopping';
+
 export type MealSlotType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | string;
 
 export interface MealSlot {
@@ -14,13 +17,23 @@ export const DEFAULT_MEAL_SLOTS: MealSlot[] = [
   { id: 'snack', name: 'Snack', order: 3, isDefault: true },
 ];
 
+// Extra item for a planned meal (side dishes, extras that go on shopping list)
+export interface MealExtraItem {
+  id: string;
+  name: string;
+  quantity?: number;
+  unit?: MeasurementUnit | null;
+  storeSection?: StoreSection | string;
+}
+
 export interface PlannedMeal {
   id: string;
   date: string; // ISO date string (YYYY-MM-DD)
   slotId: string;
   recipeId: string;
   servings: number; // Can differ from recipe's default servings
-  notes?: string;
+  notes?: string; // Free text reminders for this meal
+  extraItems?: MealExtraItem[]; // Side dishes/extras to add to shopping list
 }
 
 export interface DayNote {

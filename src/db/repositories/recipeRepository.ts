@@ -55,12 +55,14 @@ export const recipeRepository = {
       instructions: formData.instructions,
       notes: formData.notes || undefined,
       tags: formData.tags,
-      images: [],
+      images: formData.images || [],
       servings: formData.servings,
       prepTimeMinutes: formData.prepTimeMinutes ?? undefined,
       cookTimeMinutes: formData.cookTimeMinutes ?? undefined,
       sourceUrl: formData.sourceUrl || undefined,
-      sourceReference: formData.sourceReference || undefined,
+      referenceCookbook: formData.referenceCookbook || undefined,
+      referencePageNumber: formData.referencePageNumber ?? undefined,
+      referenceOther: formData.referenceOther || undefined,
       nutrition: formData.nutrition ?? undefined,
       isFavorite: false,
       createdAt: now,
@@ -97,10 +99,16 @@ export const recipeRepository = {
       updates.cookTimeMinutes = formData.cookTimeMinutes ?? undefined;
     if (formData.sourceUrl !== undefined)
       updates.sourceUrl = formData.sourceUrl || undefined;
-    if (formData.sourceReference !== undefined)
-      updates.sourceReference = formData.sourceReference || undefined;
+    if (formData.referenceCookbook !== undefined)
+      updates.referenceCookbook = formData.referenceCookbook || undefined;
+    if (formData.referencePageNumber !== undefined)
+      updates.referencePageNumber = formData.referencePageNumber ?? undefined;
+    if (formData.referenceOther !== undefined)
+      updates.referenceOther = formData.referenceOther || undefined;
     if (formData.nutrition !== undefined)
       updates.nutrition = formData.nutrition ?? undefined;
+    if (formData.images !== undefined)
+      updates.images = formData.images;
 
     await db.recipes.update(id, updates);
   },

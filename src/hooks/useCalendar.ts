@@ -10,7 +10,7 @@ import {
   endOfWeek,
 } from 'date-fns';
 import { mealPlanRepository, recipeRepository, settingsRepository } from '@/db';
-import type { PlannedMeal, MealSlot, Recipe, CalendarView } from '@/types';
+import type { PlannedMeal, MealSlot, Recipe, CalendarView, MealExtraItem } from '@/types';
 
 interface UseCalendarOptions {
   initialView?: CalendarView;
@@ -122,9 +122,23 @@ export function useCalendar(options: UseCalendarOptions = {}) {
 
   // Meal management functions
   const addMeal = useCallback(
-    async (date: Date, slotId: string, recipeId: string, servings: number) => {
+    async (
+      date: Date,
+      slotId: string,
+      recipeId: string,
+      servings: number,
+      notes?: string,
+      extraItems?: MealExtraItem[]
+    ) => {
       try {
-        const newMeal = await mealPlanRepository.addMeal(date, slotId, recipeId, servings);
+        const newMeal = await mealPlanRepository.addMeal(
+          date,
+          slotId,
+          recipeId,
+          servings,
+          notes,
+          extraItems
+        );
         setMeals((prev) => [...prev, newMeal]);
         return newMeal;
       } catch (error) {

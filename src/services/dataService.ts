@@ -7,6 +7,7 @@ import {
 } from '@/db';
 import type { PlatecraftExport, Tag, Recipe } from '@/types';
 import { CURRENT_EXPORT_VERSION } from '@/types';
+import { imageService } from './imageService';
 
 export interface ImportResult {
   success: boolean;
@@ -49,10 +50,21 @@ export const dataService = {
     // Only export custom tags (system tags are rebuilt on import)
     const customTags = allTags.filter((tag) => !tag.isSystem);
 
+    // Convert recipe image Blobs to Base64 for JSON serialization
+    const recipesWithBase64Images = await Promise.all(
+      recipes.map(async (recipe) => {
+        if (recipe.images && recipe.images.length > 0) {
+          const imagesWithBase64 = await imageService.prepareImagesForExport(recipe.images);
+          return { ...recipe, images: imagesWithBase64 };
+        }
+        return recipe;
+      })
+    );
+
     return {
       version: CURRENT_EXPORT_VERSION,
       exportDate: new Date().toISOString(),
-      recipes,
+      recipes: recipesWithBase64Images,
       customTags,
       mealPlans: plannedMeals,
       dayNotes,
@@ -200,6 +212,12 @@ export const dataService = {
               createdAt: new Date(recipe.createdAt),
               updatedAt: new Date(recipe.updatedAt),
             };
+
+            // Convert Base64 images back to Blobs
+            if (recipeToImport.images && recipeToImport.images.length > 0) {
+              recipeToImport.images = imageService.restoreImagesFromImport(recipeToImport.images);
+            }
+
             await db.recipes.put(recipeToImport);
             imported.recipes++;
           } catch (err) {

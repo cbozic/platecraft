@@ -1,5 +1,5 @@
 import { db } from '../database';
-import type { PlannedMeal, DayNote, RecurringMeal } from '@/types';
+import type { PlannedMeal, DayNote, RecurringMeal, MealExtraItem } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -36,7 +36,8 @@ export const mealPlanRepository = {
     slotId: string,
     recipeId: string,
     servings: number,
-    notes?: string
+    notes?: string,
+    extraItems?: MealExtraItem[]
   ): Promise<PlannedMeal> {
     const meal: PlannedMeal = {
       id: uuidv4(),
@@ -45,6 +46,7 @@ export const mealPlanRepository = {
       recipeId,
       servings,
       notes,
+      extraItems,
     };
     await db.plannedMeals.add(meal);
     return meal;

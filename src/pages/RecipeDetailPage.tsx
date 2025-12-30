@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Heart, Clock, Users } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Heart, Clock, Users, Book, Link as LinkIcon } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
+import { ImageGallery } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
 import type { Recipe, Tag } from '@/types';
 import styles from './RecipeDetailPage.module.css';
@@ -139,6 +140,15 @@ export function RecipeDetailPage() {
             </div>
           )}
 
+          {recipe.images && recipe.images.length > 0 && (
+            <Card>
+              <div className={styles.section}>
+                <h2 className={styles.sectionTitle}>Images</h2>
+                <ImageGallery images={recipe.images} />
+              </div>
+            </Card>
+          )}
+
           <Card>
             <div className={styles.section}>
               <h2 className={styles.sectionTitle}>Ingredients</h2>
@@ -177,6 +187,43 @@ export function RecipeDetailPage() {
               <div className={styles.section}>
                 <h2 className={styles.sectionTitle}>Notes</h2>
                 <div className={styles.notes}>{recipe.notes}</div>
+              </div>
+            </Card>
+          )}
+
+          {(recipe.sourceUrl || recipe.referenceCookbook || recipe.referenceOther) && (
+            <Card>
+              <div className={styles.section}>
+                <h2 className={styles.sectionTitle}>Source</h2>
+                <div className={styles.sourceInfo}>
+                  {recipe.referenceCookbook && (
+                    <div className={styles.sourceItem}>
+                      <Book size={16} />
+                      <span>
+                        {recipe.referenceCookbook}
+                        {recipe.referencePageNumber && `, p. ${recipe.referencePageNumber}`}
+                      </span>
+                    </div>
+                  )}
+                  {recipe.referenceOther && (
+                    <div className={styles.sourceItem}>
+                      <span>{recipe.referenceOther}</span>
+                    </div>
+                  )}
+                  {recipe.sourceUrl && (
+                    <div className={styles.sourceItem}>
+                      <LinkIcon size={16} />
+                      <a
+                        href={recipe.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.sourceLink}
+                      >
+                        {recipe.sourceUrl}
+                      </a>
+                    </div>
+                  )}
+                </div>
               </div>
             </Card>
           )}

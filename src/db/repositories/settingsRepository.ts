@@ -1,5 +1,5 @@
 import { db } from '../database';
-import type { UserSettings, MealSlot, StoreSectionInfo } from '@/types';
+import type { UserSettings, MealSlot, StoreSectionInfo, AiParsingMode } from '@/types';
 import { DEFAULT_SETTINGS } from '@/types/settings';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -148,6 +148,31 @@ export const settingsRepository = {
   // Daily calorie goal
   async setDailyCalorieGoal(goal: number | undefined): Promise<void> {
     await this.update({ dailyCalorieGoal: goal });
+  },
+
+  // Anthropic API key
+  async setAnthropicApiKey(apiKey: string | undefined): Promise<void> {
+    await this.update({ anthropicApiKey: apiKey });
+  },
+
+  async getAnthropicApiKey(): Promise<string | undefined> {
+    const settings = await this.get();
+    return settings.anthropicApiKey;
+  },
+
+  async hasAnthropicApiKey(): Promise<boolean> {
+    const apiKey = await this.getAnthropicApiKey();
+    return !!apiKey && apiKey.length > 0;
+  },
+
+  // Preferred import mode
+  async setPreferredImportMode(mode: AiParsingMode): Promise<void> {
+    await this.update({ preferredImportMode: mode });
+  },
+
+  async getPreferredImportMode(): Promise<AiParsingMode> {
+    const settings = await this.get();
+    return settings.preferredImportMode || 'manual';
   },
 
   // Reset to defaults

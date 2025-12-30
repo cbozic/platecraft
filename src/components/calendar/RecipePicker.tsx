@@ -1,15 +1,27 @@
 import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
-import { Search, Clock, Users } from 'lucide-react';
+import { Search, Clock, Users, Plus, Trash2 } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import { Modal, ModalFooter, Button, Input } from '@/components/ui';
 import { recipeRepository } from '@/db';
-import type { Recipe, MealSlot } from '@/types';
+import type { Recipe, MealSlot, MealExtraItem } from '@/types';
+import { DEFAULT_STORE_SECTIONS } from '@/types';
 import styles from './RecipePicker.module.css';
+
+const emptyExtra: Omit<MealExtraItem, 'id'> = {
+  name: '',
+  storeSection: 'other',
+};
 
 interface RecipePickerProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (recipeId: string, servings: number) => void;
+  onSelect: (
+    recipeId: string,
+    servings: number,
+    notes?: string,
+    extraItems?: MealExtraItem[]
+  ) => void;
   date: Date;
   slotId: string;
   mealSlots: MealSlot[];
@@ -27,6 +39,10 @@ export function RecipePicker({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [servings, setServings] = useState(4);
+  const [notes, setNotes] = useState('');
+  const [extraItems, setExtraItems] = useState<(MealExtraItem | Omit<MealExtraItem, 'id'>)[]>([
+    { ...emptyExtra },
+  ]);
   const [isLoading, setIsLoading] = useState(true);
 
   const slot = mealSlots.find((s) => s.id === slotId);
@@ -37,6 +53,8 @@ export function RecipePicker({
       setSearchQuery('');
       setSelectedRecipe(null);
       setServings(4);
+      setNotes('');
+      setExtraItems([{ ...emptyExtra }]);
     }
   }, [isOpen]);
 
@@ -64,7 +82,21 @@ export function RecipePicker({
 
   const handleSelect = () => {
     if (selectedRecipe) {
-      onSelect(selectedRecipe.id, servings);
+      const trimmedNotes = notes.trim() || undefined;
+      // Filter out empty extras and add IDs
+      const finalExtras = extraItems
+        .filter((item) => item.name.trim())
+        .map((item) => ({
+          ...item,
+          id: 'id' in item ? item.id : uuidv4(),
+          name: item.name.trim(),
+        }));
+      onSelect(
+        selectedRecipe.id,
+        servings,
+        trimmedNotes,
+        finalExtras.length > 0 ? finalExtras : undefined
+      );
       onClose();
     }
   };
@@ -72,6 +104,24 @@ export function RecipePicker({
   const handleRecipeClick = (recipe: Recipe) => {
     setSelectedRecipe(recipe);
     setServings(recipe.servings);
+  };
+
+  const handleAddExtra = () => {
+    setExtraItems([...extraItems, { ...emptyExtra }]);
+  };
+
+  const handleRemoveExtra = (index: number) => {
+    setExtraItems(extraItems.filter((_, i) => i !== index));
+  };
+
+  const handleExtraChange = (
+    index: number,
+    field: keyof MealExtraItem,
+    value: string
+  ) => {
+    const updated = [...extraItems];
+    updated[index] = { ...updated[index], [field]: value };
+    setExtraItems(updated);
   };
 
   return (
@@ -133,18 +183,83 @@ export function RecipePicker({
         )}
 
         {selectedRecipe && (
-          <div className={styles.servingsSection}>
-            <label className={styles.servingsLabel}>
-              Servings for this meal:
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={servings}
-                onChange={(e) => setServings(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                className={styles.servingsInput}
+          <div className={styles.mealOptions}>
+            <div className={styles.servingsSection}>
+              <label className={styles.servingsLabel}>
+                Servings for this meal:
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={servings}
+                  onChange={(e) => setServings(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className={styles.servingsInput}
+                />
+              </label>
+            </div>
+
+            <div className={styles.notesSection}>
+              <label className={styles.sectionLabel}>
+                Notes (optional)
+              </label>
+              <textarea
+                className={styles.notesInput}
+                placeholder="e.g., marinate overnight, double the sauce..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
               />
-            </label>
+            </div>
+
+            <div className={styles.extrasSection}>
+              <label className={styles.sectionLabel}>
+                Side dishes / Extras
+              </label>
+              <p className={styles.sectionHint}>
+                These items will be added to your shopping list
+              </p>
+
+              {extraItems.map((item, index) => (
+                <div key={index} className={styles.extraRow}>
+                  <input
+                    type="text"
+                    className={styles.extraNameInput}
+                    placeholder="Item name (e.g., green beans)"
+                    value={item.name}
+                    onChange={(e) => handleExtraChange(index, 'name', e.target.value)}
+                  />
+                  <select
+                    className={styles.extraSectionSelect}
+                    value={item.storeSection || 'other'}
+                    onChange={(e) => handleExtraChange(index, 'storeSection', e.target.value)}
+                  >
+                    {DEFAULT_STORE_SECTIONS.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveExtra(index)}
+                    disabled={extraItems.length === 1}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                leftIcon={<Plus size={16} />}
+                onClick={handleAddExtra}
+              >
+                Add Extra
+              </Button>
+            </div>
           </div>
         )}
       </div>

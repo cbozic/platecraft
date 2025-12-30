@@ -66,23 +66,46 @@
 
 /* Compact mode (month view) */
 .compact .meals {
-  flex-direction: row;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mealLabel {
+  display: flex;
+  align-items: center;
   gap: 4px;
-  justify-content: flex-start;
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  overflow: hidden;
+}
+
+.mealLabel:hover {
+  background-color: var(--color-primary-light);
 }
 
 .mealDot {
-  width: 8px;
-  height: 8px;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
   border-radius: var(--radius-full);
   background-color: var(--color-primary);
-  cursor: pointer;
-  transition: transform var(--transition-fast);
 }
 
-.mealDot:hover {
-  transform: scale(1.3);
+.mealName {
+  flex: 1;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notesIndicator {
+  flex-shrink: 0;
+  color: var(--color-warning, #f59e0b);
+  opacity: 0.8;
 }
 
 .mealCount {
@@ -135,6 +158,16 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.notesIndicatorWeek {
+  display: flex;
+  align-items: center;
+  color: var(--color-warning, #f59e0b);
+}
+
+.mealCard:hover .notesIndicatorWeek {
+  color: var(--color-text-inverse);
 }
 
 .removeButton {
@@ -220,7 +253,7 @@
   font-weight: var(--font-weight-medium);
 }
 
-.mealDot.dragging {
+.mealLabel.dragging {
   opacity: 0.5;
 }
 
@@ -236,11 +269,52 @@
   }
 
   .mealDot {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
+  }
+
+  .mealName {
+    font-size: 0.65rem;
   }
 
   .mealCount {
     display: none;
+  }
+}
+
+/* Print styles for calendar */
+@media print {
+  .mealLabel {
+    padding: 0;
+    background: none;
+  }
+
+  .mealDot {
+    width: 5px;
+    height: 5px;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .mealName {
+    font-size: 7pt;
+    color: black;
+  }
+
+  .mealCount {
+    display: none;
+  }
+
+  .addButton,
+  .removeButton,
+  .dragHandle {
+    display: none;
+  }
+
+  .notesIndicator,
+  .notesIndicatorWeek {
+    color: #666;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }

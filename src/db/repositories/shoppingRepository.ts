@@ -124,7 +124,7 @@ export const shoppingRepository = {
     const recipes = await recipeRepository.getByIds(recipeIds);
     const recipeMap = new Map(recipes.map((r) => [r.id, r]));
 
-    // Aggregate ingredients
+    // Aggregate ingredients from recipes
     const aggregated = new Map<string, AggregatedIngredient>();
 
     for (const meal of meals) {
@@ -169,6 +169,32 @@ export const shoppingRepository = {
       }
     }
 
+    // Aggregate extra items from meals (side dishes, extras)
+    const extraAggregated = new Map<string, { name: string; quantity: number | null; unit: string | null; storeSection: string }>();
+
+    for (const meal of meals) {
+      if (!meal.extraItems || meal.extraItems.length === 0) continue;
+
+      for (const extra of meal.extraItems) {
+        const key = `${extra.name.toLowerCase()}-${extra.unit || 'each'}`;
+        const existing = extraAggregated.get(key);
+
+        if (existing) {
+          existing.quantity =
+            existing.quantity !== null && extra.quantity !== undefined
+              ? existing.quantity + extra.quantity
+              : existing.quantity ?? extra.quantity ?? null;
+        } else {
+          extraAggregated.set(key, {
+            name: extra.name,
+            quantity: extra.quantity ?? null,
+            unit: extra.unit ?? null,
+            storeSection: extra.storeSection || 'other',
+          });
+        }
+      }
+    }
+
     // Convert aggregated ingredients to shopping items
     const items: ShoppingItem[] = Array.from(aggregated.values()).map((agg) => ({
       id: uuidv4(),
@@ -181,6 +207,21 @@ export const shoppingRepository = {
       isManual: false,
       isRecurring: false,
     }));
+
+    // Add extra items (meal extras/side dishes)
+    for (const extra of extraAggregated.values()) {
+      items.push({
+        id: uuidv4(),
+        name: extra.name,
+        quantity: extra.quantity,
+        unit: extra.unit as ShoppingItem['unit'],
+        storeSection: extra.storeSection,
+        isChecked: false,
+        sourceRecipeIds: [], // Not from a recipe, from meal extras
+        isManual: false,
+        isRecurring: false,
+      });
+    }
 
     // Create the shopping list
     const list = await this.createList(name, startDate, endDate);

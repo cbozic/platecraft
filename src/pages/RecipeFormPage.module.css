@@ -141,10 +141,10 @@
   border-radius: var(--radius-md);
 }
 
-.prepInput {
-  width: 150px;
+.sectionSelect {
+  width: 140px;
   height: 2.5rem;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-sm);
   font-size: var(--font-size-base);
   color: var(--color-text-primary);
   background-color: var(--color-surface);
@@ -155,7 +155,7 @@
 .qtyInput:focus,
 .unitSelect:focus,
 .nameInput:focus,
-.prepInput:focus {
+.sectionSelect:focus {
   outline: none;
   border-color: var(--color-border-focus);
   box-shadow: 0 0 0 3px var(--color-primary-light);

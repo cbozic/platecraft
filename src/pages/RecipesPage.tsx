@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, Upload } from 'lucide-react';
 import { Button, Input, Card } from '@/components/ui';
 import { recipeRepository } from '@/db';
 import type { Recipe } from '@/types';
@@ -46,9 +46,14 @@ export function RecipesPage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Recipes</h1>
-        <Link to="/recipes/new">
-          <Button leftIcon={<Plus size={18} />}>Add Recipe</Button>
-        </Link>
+        <div className={styles.headerActions}>
+          <Link to="/import">
+            <Button variant="outline" leftIcon={<Upload size={18} />}>Import</Button>
+          </Link>
+          <Link to="/recipes/new">
+            <Button leftIcon={<Plus size={18} />}>Add Recipe</Button>
+          </Link>
+        </div>
       </div>
 
       <div className={styles.toolbar}>

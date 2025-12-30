@@ -5,6 +5,7 @@ import {
   RecipesPage,
   RecipeDetailPage,
   RecipeFormPage,
+  ImportRecipePage,
   CalendarPage,
   ShoppingPage,
   SettingsPage,
@@ -32,6 +33,10 @@ const router = createBrowserRouter([
       {
         path: 'recipes/:id/edit',
         element: <RecipeFormPage />,
+      },
+      {
+        path: 'import',
+        element: <ImportRecipePage />,
       },
       {
         path: 'calendar',

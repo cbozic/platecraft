@@ -5,6 +5,7 @@ export * from './tags';
 export * from './mealPlan';
 export * from './calendar';
 export * from './settings';
+export * from './import';
 
 // Export/Import data format
 export interface PlatecraftExport {
@@ -20,4 +21,4 @@ export interface PlatecraftExport {
   externalCalendars: import('./calendar').ExternalCalendar[];
 }
 
-export const CURRENT_EXPORT_VERSION = '1.0';
+export const CURRENT_EXPORT_VERSION = '1.1';

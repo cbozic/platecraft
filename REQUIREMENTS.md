@@ -43,7 +43,10 @@ Each recipe contains:
 - **Serving size** (base serving count)
 - **Prep time** and **Cook time** (optional)
 - **Source URL** (optional - for web recipes)
-- **Source reference** (optional - for cookbook citations)
+- **Source reference** (optional - for cookbook citations):
+  - Cookbook name
+  - Page number
+  - Other reference (magazine, family recipe, etc.)
 - **Nutritional information** per serving:
   - Calories
   - Protein (g)
@@ -104,6 +107,53 @@ System-provided tags (users cannot delete, but can hide):
 - User confirms/corrects before saving
 - Original image optionally attached to recipe
 
+### 2.7 Recipe Import Methods
+Three methods for importing recipes into the system:
+
+**Photo Import**:
+- Upload image of recipe (cookbook page, recipe card, handwritten)
+- OCR extracts text using Tesseract.js (client-side)
+- AI parses extracted text into structured recipe fields
+- Preview parsed recipe before saving, allowing manual corrections
+
+**URL Import**:
+- Paste URL from recipe website
+- Attempt to extract schema.org/Recipe JSON-LD (preferred, no AI needed)
+- Fallback: Use CORS proxy (allorigins.win) to fetch page content
+- If proxy fails: Manual paste fallback available
+- AI parses raw text into structured recipe if schema.org not found
+
+**Text Paste Import**:
+- Paste recipe text from any source (email, message, document)
+- AI parses into structured recipe fields
+- Supports various formats (ingredient lists, numbered steps, etc.)
+
+All import methods show a preview/edit form before final save.
+
+### 2.8 AI Integration for Recipe Parsing
+Two modes for AI-powered recipe parsing:
+
+**API Mode**:
+- User provides their Anthropic API key in settings
+- Key stored locally in browser (never sent to any server except Anthropic)
+- Automatic parsing when importing recipes
+- Rate limit handling with clear error messages
+
+**Manual Paste Mode**:
+- Available when API key not configured or as user preference
+- App generates a formatted prompt with the raw recipe text
+- User copies prompt to Claude chat (web/app)
+- User copies Claude's JSON response back into app
+- App parses JSON and populates preview form
+
+AI is used for:
+- Parsing ingredient quantities, units, and names
+- Extracting prep and cook times
+- Formatting instructions into clean steps
+- Identifying recipe metadata (servings, description)
+
+Manual mode always available as fallback if API is unavailable or rate limited.
+
 ---
 
 ## 3. Ingredient System
@@ -113,9 +163,8 @@ Each ingredient entry contains:
 - **Name** (required)
 - **Quantity** (numeric, supports fractions like "1/2")
 - **Unit** (from supported units list)
-- **Preparation notes** (e.g., "diced", "room temperature")
+- **Store section** (required - for shopping list grouping, e.g., Produce, Dairy, Meat & Seafood)
 - **Optional flag** (marks ingredient as optional)
-- **Store aisle/section** (for shopping list grouping)
 
 ### 3.2 Unit Conversion
 Supported unit systems: US Customary, Metric, UK Imperial
@@ -181,8 +230,13 @@ Supported unit systems: US Customary, Metric, UK Imperial
 
 ### 5.2 Meal Planning
 - Drag-and-drop recipes onto calendar dates
+- Drag-and-drop to move meals between slots and days
 - Multiple meals per day (breakfast, lunch, dinner, snacks)
 - Meal slots are customizable (user can add/rename slots)
+- **Meal notes**: Add notes when planning a meal (e.g., "marinate overnight", "double the sauce")
+- **Meal extras**: Add side dishes/extras when planning a meal (e.g., "green beans", "dinner rolls")
+  - Extras are added to shopping list when generating
+  - Each extra has a name and store section
 - Copy meals between days
 - Recurring meal plans (e.g., "Taco Tuesday" every week)
 - Notes on specific days (not tied to recipes)
@@ -201,9 +255,12 @@ Supported unit systems: US Customary, Metric, UK Imperial
 
 ### 5.4 Calendar Display
 - Meal plans shown prominently
+- **Month view**: Shows meal names (truncated) with color indicator dots
+- **Week view**: Shows full meal cards with recipe title and actions
 - External calendar events shown in secondary style
 - Color coding for different meal types
 - Visual indicator for days with shopping needs
+- Print-friendly layout for both views
 
 ---
 
@@ -212,6 +269,7 @@ Supported unit systems: US Customary, Metric, UK Imperial
 ### 6.1 List Generation
 - Select date range (e.g., "next 7 days")
 - Automatically aggregate ingredients from all planned recipes
+- **Include meal extras**: Side dishes/extras added to meals are included in the shopping list
 - **Smart combining**: Merge same ingredients across recipes
   - "2 eggs" + "3 eggs" = "5 eggs"
   - Handles unit conversion when combining
@@ -312,6 +370,7 @@ Supported unit systems: US Customary, Metric, UK Imperial
 ### 9.1 Main Navigation
 - Recipes (browse/search)
 - Add Recipe
+- Import Recipe (Photo/URL/Text)
 - Calendar (meal planning)
 - Shopping List
 - Settings
@@ -341,6 +400,9 @@ Supported unit systems: US Customary, Metric, UK Imperial
 - Manage store sections
 - External calendar connections
 - Data management (import/export/clear)
+- **Recipe Import Settings**:
+  - Anthropic API key (stored locally, masked display)
+  - Preferred import method (API or Manual paste)
 
 ---
 
@@ -427,26 +489,41 @@ These features are explicitly NOT included in initial requirements:
 - [x] useCalendar hook for calendar state management
 - [x] Shopping list components (DateRangePicker, ShoppingListDetail, ShoppingItemRow, AddItemModal)
 - [x] useShoppingList hook for shopping list state management
-- [x] Shopping list generation from meal plans
+- [x] Shopping list generation from meal plans (including meal extras)
 - [x] Tag management (create, edit, delete custom tags; hide system tags)
 - [x] Import/Export functionality with merge/replace modes
 - [x] Clear all data functionality
 - [x] PWA configuration with service worker
+- [x] Drag-and-drop to move meals between slots and days
+- [x] Month view shows meal names (not just dots)
+- [x] Print-optimized calendar styles
+- [x] Recipe form (add/edit recipes) with store section per ingredient
+- [x] Recipe detail view with source information display
+- [x] Meal notes when adding to calendar
+- [x] Meal extras (side dishes) when adding to calendar
+- [x] Notes/extras indicator on calendar meal cards
+- [x] Recipe source reference fields (cookbook, page, other)
 
 ### In Progress / Remaining
-- [ ] Recipe form (add/edit recipes)
-- [ ] Recipe detail view
 - [ ] Recipe search and filtering
 - [ ] Favorites/starred recipes
 - [ ] Meal slot customization in settings
 - [ ] Google Calendar integration (OAuth 2.0)
 - [ ] iCal URL import
-- [ ] OCR recipe import
 - [ ] Nutritional information lookup
 - [ ] Unit conversion utilities
 - [ ] Print functionality for recipes
 
+**Recipe Import (NEW)**:
+- [ ] Import types and settings (API key storage)
+- [ ] Import page with Photo/URL/Text tabs
+- [ ] Text paste import with AI parsing
+- [ ] Manual paste flow (copy prompt to Claude, paste response back)
+- [ ] API integration (Claude API when key configured)
+- [ ] URL import with schema.org parsing + CORS proxy
+- [ ] Photo import with Tesseract.js OCR
+
 ---
 
-*Requirements Version: 1.0*
+*Requirements Version: 1.3*
 *Last Updated: December 30, 2025*
