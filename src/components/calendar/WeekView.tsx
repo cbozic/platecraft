@@ -15,6 +15,7 @@ interface WeekViewProps {
   onMealClick: (meal: PlannedMeal) => void;
   onAddMeal: (date: Date, slotId: string) => void;
   onRemoveMeal: (mealId: string) => void;
+  onMoveMeal?: (mealId: string, toDate: string, toSlotId: string) => void;
 }
 
 export function WeekView({
@@ -27,6 +28,7 @@ export function WeekView({
   onMealClick,
   onAddMeal,
   onRemoveMeal,
+  onMoveMeal,
 }: WeekViewProps) {
   const days = useMemo(
     () => getWeekDays(currentDate, weekStartsOn),
@@ -63,6 +65,7 @@ export function WeekView({
             onMealClick={onMealClick}
             onAddMeal={(slotId) => onAddMeal(day.date, slotId)}
             onRemoveMeal={onRemoveMeal}
+            onMoveMeal={onMoveMeal}
             compact={false}
           />
         ))}

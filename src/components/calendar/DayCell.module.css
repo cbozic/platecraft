@@ -181,6 +181,49 @@
   background-color: var(--color-primary-light);
 }
 
+/* Drag and drop styles */
+.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.mealCard:hover .dragHandle {
+  opacity: 1;
+}
+
+.mealCard:hover .dragHandle:hover {
+  color: var(--color-text-primary);
+}
+
+.dropTarget {
+  background-color: var(--color-primary-light);
+  border-radius: var(--radius-sm);
+}
+
+.dropTargetButton {
+  border-color: var(--color-primary);
+  border-style: solid;
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  opacity: 1;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.mealDot.dragging {
+  opacity: 0.5;
+}
+
 @media (max-width: 768px) {
   .cell {
     padding: 2px;

@@ -14,6 +14,7 @@ interface CalendarGridProps {
   onMealClick: (meal: PlannedMeal) => void;
   onAddMeal: (date: Date, slotId: string) => void;
   onRemoveMeal: (mealId: string) => void;
+  onMoveMeal?: (mealId: string, toDate: string, toSlotId: string) => void;
 }
 
 export function CalendarGrid({
@@ -26,6 +27,7 @@ export function CalendarGrid({
   onMealClick,
   onAddMeal,
   onRemoveMeal,
+  onMoveMeal,
 }: CalendarGridProps) {
   const weeks = useMemo(
     () => getMonthCalendarWeeks(currentDate, weekStartsOn),
@@ -60,6 +62,7 @@ export function CalendarGrid({
                 onMealClick={onMealClick}
                 onAddMeal={(slotId) => onAddMeal(day.date, slotId)}
                 onRemoveMeal={onRemoveMeal}
+                onMoveMeal={onMoveMeal}
                 compact
               />
             ))}

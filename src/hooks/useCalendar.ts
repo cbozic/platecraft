@@ -160,6 +160,23 @@ export function useCalendar(options: UseCalendarOptions = {}) {
     []
   );
 
+  const moveMeal = useCallback(
+    async (mealId: string, toDate: string, toSlotId: string) => {
+      try {
+        const updatedMeal = await mealPlanRepository.moveMeal(mealId, toDate, toSlotId);
+        if (updatedMeal) {
+          setMeals((prev) =>
+            prev.map((m) => (m.id === mealId ? updatedMeal : m))
+          );
+        }
+      } catch (error) {
+        console.error('Failed to move meal:', error);
+        throw error;
+      }
+    },
+    []
+  );
+
   // Refresh meals data
   const refreshMeals = useCallback(async () => {
     let start: Date;
@@ -202,6 +219,7 @@ export function useCalendar(options: UseCalendarOptions = {}) {
     addMeal,
     removeMeal,
     updateMeal,
+    moveMeal,
     refreshMeals,
   };
 }

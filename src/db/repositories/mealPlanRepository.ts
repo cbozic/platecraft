@@ -58,6 +58,19 @@ export const mealPlanRepository = {
     await db.plannedMeals.delete(id);
   },
 
+  async moveMeal(id: string, toDate: string, toSlotId: string): Promise<PlannedMeal | undefined> {
+    const meal = await db.plannedMeals.get(id);
+    if (!meal) return undefined;
+
+    const updatedMeal = {
+      ...meal,
+      date: toDate,
+      slotId: toSlotId,
+    };
+    await db.plannedMeals.put(updatedMeal);
+    return updatedMeal;
+  },
+
   async copyMealsToDate(sourceDate: Date, targetDate: Date): Promise<void> {
     const sourceMeals = await this.getMealsForDate(sourceDate);
     const targetDateStr = format(targetDate, 'yyyy-MM-dd');

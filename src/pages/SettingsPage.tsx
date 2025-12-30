@@ -1,29 +1,54 @@
-import { useState, useEffect } from 'react';
-import { Download, Upload, Trash2 } from 'lucide-react';
-import { Button, Card, CardHeader, CardBody } from '@/components/ui';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Button, Card, CardHeader, CardBody, Modal, ModalFooter } from '@/components/ui';
 import { TagManager } from '@/components/settings';
 import { settingsRepository } from '@/db';
-import type { UserSettings, Theme, UnitSystem, CalendarStartDay } from '@/types';
+import { dataService, type ImportResult } from '@/services';
+import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport } from '@/types';
 import styles from './SettingsPage.module.css';
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const [dataStats, setDataStats] = useState<{
+    recipes: number;
+    customTags: number;
+    mealPlans: number;
+    shoppingLists: number;
+  } | null>(null);
+
+  // Import modal state
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importData, setImportData] = useState<PlatecraftExport | null>(null);
+  const [importMode, setImportMode] = useState<'merge' | 'replace'>('merge');
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Clear data modal state
+  const [clearModalOpen, setClearModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [settingsData, stats] = await Promise.all([
+        settingsRepository.get(),
+        dataService.getDataStats(),
+      ]);
+      setSettings(settingsData);
+      setDataStats(stats);
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const data = await settingsRepository.get();
-        setSettings(data);
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadSettings();
-  }, []);
+    loadData();
+  }, [loadData]);
 
   const handleThemeChange = async (theme: Theme) => {
     if (!settings) return;
@@ -42,6 +67,102 @@ export function SettingsPage() {
     if (!settings) return;
     await settingsRepository.setCalendarStartDay(day);
     setSettings({ ...settings, calendarStartDay: day });
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await dataService.downloadExport();
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export data. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset state
+    setImportError(null);
+    setImportResult(null);
+    setImportData(null);
+
+    try {
+      const data = await dataService.readImportFile(file);
+      const validation = dataService.validateImportData(data);
+
+      if (!validation.valid) {
+        setImportError(`Invalid file format:\n${validation.errors.join('\n')}`);
+        setImportModalOpen(true);
+        return;
+      }
+
+      setImportData(data);
+      setImportModalOpen(true);
+    } catch (error) {
+      setImportError(`Failed to read file: ${error}`);
+      setImportModalOpen(true);
+    }
+
+    // Reset file input
+    e.target.value = '';
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importData) return;
+
+    setIsImporting(true);
+    try {
+      const result = await dataService.importData(importData, importMode);
+      setImportResult(result);
+
+      // Refresh data stats
+      const stats = await dataService.getDataStats();
+      setDataStats(stats);
+    } catch (error) {
+      setImportResult({
+        success: false,
+        errors: [`Import failed: ${error}`],
+        imported: { recipes: 0, tags: 0, mealPlans: 0, dayNotes: 0, recurringMeals: 0, shoppingLists: 0 },
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleImportClose = () => {
+    setImportModalOpen(false);
+    setImportData(null);
+    setImportResult(null);
+    setImportError(null);
+    setImportMode('merge');
+  };
+
+  const handleClearData = async () => {
+    setIsClearing(true);
+    try {
+      await dataService.clearAllData(true);
+      setClearModalOpen(false);
+
+      // Refresh data stats
+      const stats = await dataService.getDataStats();
+      setDataStats(stats);
+
+      // Reload settings
+      await loadData();
+    } catch (error) {
+      console.error('Failed to clear data:', error);
+      alert('Failed to clear data. Please try again.');
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   if (isLoading || !settings) {
@@ -178,20 +299,197 @@ export function SettingsPage() {
             <h2 className={styles.sectionTitle}>Data Management</h2>
           </CardHeader>
           <CardBody>
+            {dataStats && (
+              <div className={styles.dataStats}>
+                <p>
+                  <strong>{dataStats.recipes}</strong> recipes,{' '}
+                  <strong>{dataStats.customTags}</strong> custom tags,{' '}
+                  <strong>{dataStats.mealPlans}</strong> planned meals,{' '}
+                  <strong>{dataStats.shoppingLists}</strong> shopping lists
+                </p>
+              </div>
+            )}
             <div className={styles.dataActions}>
-              <Button variant="outline" leftIcon={<Download size={18} />}>
-                Export All Data
+              <Button
+                variant="outline"
+                leftIcon={<Download size={18} />}
+                onClick={handleExport}
+                disabled={isExporting}
+              >
+                {isExporting ? 'Exporting...' : 'Export All Data'}
               </Button>
-              <Button variant="outline" leftIcon={<Upload size={18} />}>
+              <Button
+                variant="outline"
+                leftIcon={<Upload size={18} />}
+                onClick={handleImportClick}
+              >
                 Import Data
               </Button>
-              <Button variant="danger" leftIcon={<Trash2 size={18} />}>
+              <Button
+                variant="danger"
+                leftIcon={<Trash2 size={18} />}
+                onClick={() => setClearModalOpen(true)}
+              >
                 Clear All Data
               </Button>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
           </CardBody>
         </Card>
       </div>
+
+      {/* Import Modal */}
+      <Modal
+        isOpen={importModalOpen}
+        onClose={handleImportClose}
+        title="Import Data"
+        size="md"
+      >
+        <div className={styles.importModal}>
+          {importError && (
+            <div className={styles.importError}>
+              <XCircle size={20} />
+              <pre>{importError}</pre>
+            </div>
+          )}
+
+          {importData && !importResult && (
+            <>
+              <div className={styles.importPreview}>
+                <h4>File contains:</h4>
+                <ul>
+                  <li>{importData.recipes?.length || 0} recipes</li>
+                  <li>{importData.customTags?.length || 0} custom tags</li>
+                  <li>{importData.mealPlans?.length || 0} meal plans</li>
+                  <li>{importData.shoppingLists?.length || 0} shopping lists</li>
+                </ul>
+                <p className={styles.exportDate}>
+                  Exported: {new Date(importData.exportDate).toLocaleString()}
+                </p>
+              </div>
+
+              <div className={styles.importMode}>
+                <h4>Import mode:</h4>
+                <label className={styles.radioLabel}>
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="merge"
+                    checked={importMode === 'merge'}
+                    onChange={() => setImportMode('merge')}
+                  />
+                  <span>
+                    <strong>Merge</strong> - Add to existing data (skip duplicates)
+                  </span>
+                </label>
+                <label className={styles.radioLabel}>
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="replace"
+                    checked={importMode === 'replace'}
+                    onChange={() => setImportMode('replace')}
+                  />
+                  <span>
+                    <strong>Replace</strong> - Clear existing data first
+                  </span>
+                </label>
+              </div>
+
+              <ModalFooter>
+                <Button variant="outline" onClick={handleImportClose}>
+                  Cancel
+                </Button>
+                <Button onClick={handleImportConfirm} disabled={isImporting}>
+                  {isImporting ? 'Importing...' : 'Import'}
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+
+          {importResult && (
+            <>
+              <div className={importResult.success ? styles.importSuccess : styles.importWarning}>
+                {importResult.success ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
+                <span>{importResult.success ? 'Import completed!' : 'Import completed with errors'}</span>
+              </div>
+
+              <div className={styles.importSummary}>
+                <h4>Imported:</h4>
+                <ul>
+                  <li>{importResult.imported.recipes} recipes</li>
+                  <li>{importResult.imported.tags} tags</li>
+                  <li>{importResult.imported.mealPlans} meal plans</li>
+                  <li>{importResult.imported.shoppingLists} shopping lists</li>
+                </ul>
+              </div>
+
+              {importResult.errors.length > 0 && (
+                <div className={styles.importErrors}>
+                  <h4>Errors:</h4>
+                  <ul>
+                    {importResult.errors.slice(0, 10).map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                    {importResult.errors.length > 10 && (
+                      <li>...and {importResult.errors.length - 10} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              <ModalFooter>
+                <Button onClick={handleImportClose}>Done</Button>
+              </ModalFooter>
+            </>
+          )}
+
+          {!importData && !importError && (
+            <ModalFooter>
+              <Button variant="outline" onClick={handleImportClose}>
+                Cancel
+              </Button>
+            </ModalFooter>
+          )}
+        </div>
+      </Modal>
+
+      {/* Clear Data Confirmation Modal */}
+      <Modal
+        isOpen={clearModalOpen}
+        onClose={() => setClearModalOpen(false)}
+        title="Clear All Data"
+        size="sm"
+      >
+        <div className={styles.clearModal}>
+          <div className={styles.clearWarning}>
+            <AlertTriangle size={32} />
+            <p>
+              This will permanently delete all your recipes, meal plans, shopping lists, and
+              custom tags. This action cannot be undone.
+            </p>
+          </div>
+
+          <p className={styles.clearSuggestion}>
+            Consider exporting your data first as a backup.
+          </p>
+
+          <ModalFooter>
+            <Button variant="outline" onClick={() => setClearModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleClearData} disabled={isClearing}>
+              {isClearing ? 'Clearing...' : 'Clear All Data'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
     </div>
   );
 }

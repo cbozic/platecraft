@@ -23,6 +23,7 @@ export function CalendarPage() {
     goToDate,
     addMeal,
     removeMeal,
+    moveMeal,
   } = useCalendar();
 
   // Recipe picker state
@@ -54,6 +55,13 @@ export function CalendarPage() {
       }
     },
     [removeMeal]
+  );
+
+  const handleMoveMeal = useCallback(
+    async (mealId: string, toDate: string, toSlotId: string) => {
+      await moveMeal(mealId, toDate, toSlotId);
+    },
+    [moveMeal]
   );
 
   const handleRecipeSelect = useCallback(
@@ -136,6 +144,7 @@ export function CalendarPage() {
             onMealClick={handleMealClick}
             onAddMeal={handleAddMeal}
             onRemoveMeal={handleRemoveMeal}
+            onMoveMeal={handleMoveMeal}
           />
         ) : (
           <WeekView
@@ -148,6 +157,7 @@ export function CalendarPage() {
             onMealClick={handleMealClick}
             onAddMeal={handleAddMeal}
             onRemoveMeal={handleRemoveMeal}
+            onMoveMeal={handleMoveMeal}
           />
         )}
       </div>
