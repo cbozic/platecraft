@@ -1,15 +1,73 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Filter, Upload } from 'lucide-react';
 import { Button, Input, Card } from '@/components/ui';
+import { RecipeFilterPanel, getActiveFilterCount, DEFAULT_FILTERS } from '@/components/recipe';
+import type { RecipeFilters } from '@/components/recipe';
 import { recipeRepository } from '@/db';
 import type { Recipe } from '@/types';
 import styles from './RecipesPage.module.css';
 
+// Parse filters from URL search params
+function parseFiltersFromParams(params: URLSearchParams): RecipeFilters {
+  const tags = params.get('tags');
+  const fav = params.get('fav');
+  const prepMax = params.get('prepMax');
+  const cookMax = params.get('cookMax');
+  const servMin = params.get('servMin');
+  const servMax = params.get('servMax');
+
+  return {
+    tags: tags ? tags.split(',').filter(Boolean) : [],
+    favoritesOnly: fav === '1',
+    maxPrepTime: prepMax ? parseInt(prepMax, 10) : null,
+    maxCookTime: cookMax ? parseInt(cookMax, 10) : null,
+    minServings: servMin ? parseInt(servMin, 10) : null,
+    maxServings: servMax ? parseInt(servMax, 10) : null,
+  };
+}
+
+// Convert filters to URL search params
+function filtersToParams(filters: RecipeFilters): URLSearchParams {
+  const params = new URLSearchParams();
+
+  if (filters.tags.length > 0) {
+    params.set('tags', filters.tags.join(','));
+  }
+  if (filters.favoritesOnly) {
+    params.set('fav', '1');
+  }
+  if (filters.maxPrepTime !== null) {
+    params.set('prepMax', filters.maxPrepTime.toString());
+  }
+  if (filters.maxCookTime !== null) {
+    params.set('cookMax', filters.maxCookTime.toString());
+  }
+  if (filters.minServings !== null) {
+    params.set('servMin', filters.minServings.toString());
+  }
+  if (filters.maxServings !== null) {
+    params.set('servMax', filters.maxServings.toString());
+  }
+
+  return params;
+}
+
 export function RecipesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  // Parse filters from URL
+  const filters = useMemo(() => parseFiltersFromParams(searchParams), [searchParams]);
+
+  // Update URL when filters change
+  const handleFiltersChange = useCallback((newFilters: RecipeFilters) => {
+    const newParams = filtersToParams(newFilters);
+    setSearchParams(newParams, { replace: true });
+  }, [setSearchParams]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -26,13 +84,58 @@ export function RecipesPage() {
     loadData();
   }, []);
 
-  const filteredRecipes = searchQuery
-    ? recipes.filter(
-        (recipe) =>
-          recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          recipe.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : recipes;
+  // Apply search and filters
+  const filteredRecipes = useMemo(() => {
+    return recipes.filter((recipe) => {
+      // Text search
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch =
+          recipe.title.toLowerCase().includes(query) ||
+          recipe.description?.toLowerCase().includes(query) ||
+          recipe.ingredients.some((ing) => ing.name.toLowerCase().includes(query));
+        if (!matchesSearch) return false;
+      }
+
+      // Tag filter (OR logic - recipe must have at least one selected tag)
+      if (filters.tags.length > 0) {
+        if (!filters.tags.some((tagId) => recipe.tags.includes(tagId))) {
+          return false;
+        }
+      }
+
+      // Favorites filter
+      if (filters.favoritesOnly && !recipe.isFavorite) {
+        return false;
+      }
+
+      // Prep time filter
+      if (filters.maxPrepTime !== null) {
+        if ((recipe.prepTimeMinutes ?? 0) > filters.maxPrepTime) {
+          return false;
+        }
+      }
+
+      // Cook time filter
+      if (filters.maxCookTime !== null) {
+        if ((recipe.cookTimeMinutes ?? 0) > filters.maxCookTime) {
+          return false;
+        }
+      }
+
+      // Servings filter
+      if (filters.minServings !== null && recipe.servings < filters.minServings) {
+        return false;
+      }
+      if (filters.maxServings !== null && recipe.servings > filters.maxServings) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [recipes, searchQuery, filters]);
+
+  const activeFilterCount = getActiveFilterCount(filters);
 
   if (isLoading) {
     return (
@@ -67,20 +170,49 @@ export function RecipesPage() {
             fullWidth
           />
         </div>
-        <Button variant="outline" leftIcon={<Filter size={18} />}>
-          Filter
-        </Button>
+        <div className={styles.filterWrapper}>
+          <Button
+            variant={activeFilterCount > 0 ? 'primary' : 'outline'}
+            leftIcon={<Filter size={18} />}
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+          >
+            Filter{activeFilterCount > 0 && ` (${activeFilterCount})`}
+          </Button>
+          <RecipeFilterPanel
+            filters={filters}
+            onChange={handleFiltersChange}
+            isOpen={isFilterOpen}
+            onClose={() => setIsFilterOpen(false)}
+          />
+        </div>
       </div>
 
       {filteredRecipes.length === 0 ? (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>No recipes yet</p>
-          <p className={styles.emptyText}>
-            Start building your recipe collection by adding your first recipe.
-          </p>
-          <Link to="/recipes/new">
-            <Button leftIcon={<Plus size={18} />}>Add Your First Recipe</Button>
-          </Link>
+          {recipes.length === 0 ? (
+            <>
+              <p className={styles.emptyTitle}>No recipes yet</p>
+              <p className={styles.emptyText}>
+                Start building your recipe collection by adding your first recipe.
+              </p>
+              <Link to="/recipes/new">
+                <Button leftIcon={<Plus size={18} />}>Add Your First Recipe</Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className={styles.emptyTitle}>No matching recipes</p>
+              <p className={styles.emptyText}>
+                Try adjusting your search or filters to find what you&apos;re looking for.
+              </p>
+              <Button variant="outline" onClick={() => {
+                setSearchQuery('');
+                handleFiltersChange(DEFAULT_FILTERS);
+              }}>
+                Clear Search & Filters
+              </Button>
+            </>
+          )}
         </div>
       ) : (
         <div className={styles.grid}>

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, Heart, Clock, Users, Book, Link as LinkIcon } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
-import { ImageGallery } from '@/components/recipe';
+import { ImageGallery, ServingsScaler } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
+import { scaleQuantity, formatQuantity, getScaleLabel } from '@/utils/recipeScaling';
 import type { Recipe, Tag } from '@/types';
 import styles from './RecipeDetailPage.module.css';
 
@@ -13,6 +14,7 @@ export function RecipeDetailPage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [scaledServings, setScaledServings] = useState<number | null>(null);
 
   useEffect(() => {
     const loadRecipe = async () => {
@@ -21,6 +23,7 @@ export function RecipeDetailPage() {
         const recipeData = await recipeRepository.getById(id);
         if (recipeData) {
           setRecipe(recipeData);
+          setScaledServings(recipeData.servings);
           if (recipeData.tags.length > 0) {
             const tagData = await tagRepository.getByIds(recipeData.tags);
             setTags(tagData);
@@ -49,6 +52,15 @@ export function RecipeDetailPage() {
     await recipeRepository.toggleFavorite(recipe.id);
     setRecipe({ ...recipe, isFavorite: !recipe.isFavorite });
   };
+
+  // Calculate scale factor
+  const scaleFactor = useMemo(() => {
+    if (!recipe || scaledServings === null) return 1;
+    return scaledServings / recipe.servings;
+  }, [recipe, scaledServings]);
+
+  const isScaled = Math.abs(scaleFactor - 1) > 0.01;
+  const scaleLabel = getScaleLabel(scaleFactor);
 
   if (isLoading) {
     return (
@@ -126,7 +138,11 @@ export function RecipeDetailPage() {
             )}
             <div className={styles.metaItem}>
               <Users size={16} />
-              <span>{recipe.servings} servings</span>
+              <ServingsScaler
+                originalServings={recipe.servings}
+                currentServings={scaledServings ?? recipe.servings}
+                onChange={setScaledServings}
+              />
             </div>
           </div>
 
@@ -151,26 +167,38 @@ export function RecipeDetailPage() {
 
           <Card>
             <div className={styles.section}>
-              <h2 className={styles.sectionTitle}>Ingredients</h2>
+              <div className={styles.sectionHeader}>
+                <h2 className={styles.sectionTitle}>
+                  Ingredients
+                  {scaleLabel && (
+                    <span className={styles.scaleIndicator}>({scaleLabel})</span>
+                  )}
+                </h2>
+              </div>
               <ul className={styles.ingredientList}>
-                {recipe.ingredients.map((ingredient) => (
-                  <li key={ingredient.id} className={styles.ingredient}>
-                    <span className={styles.ingredientQuantity}>
-                      {ingredient.quantity} {ingredient.unit}
-                    </span>
-                    <span className={styles.ingredientName}>
-                      {ingredient.name}
-                      {ingredient.preparationNotes && (
-                        <span className={styles.prepNotes}>
-                          , {ingredient.preparationNotes}
-                        </span>
-                      )}
-                      {ingredient.isOptional && (
-                        <span className={styles.optional}>(optional)</span>
-                      )}
-                    </span>
-                  </li>
-                ))}
+                {recipe.ingredients.map((ingredient) => {
+                  const scaledQty = scaleQuantity(ingredient.quantity, scaleFactor);
+                  const displayQty = formatQuantity(scaledQty, ingredient.unit);
+
+                  return (
+                    <li key={ingredient.id} className={styles.ingredient}>
+                      <span className={`${styles.ingredientQuantity} ${isScaled ? styles.scaled : ''}`}>
+                        {displayQty} {ingredient.unit}
+                      </span>
+                      <span className={styles.ingredientName}>
+                        {ingredient.name}
+                        {ingredient.preparationNotes && (
+                          <span className={styles.prepNotes}>
+                            , {ingredient.preparationNotes}
+                          </span>
+                        )}
+                        {ingredient.isOptional && (
+                          <span className={styles.optional}>(optional)</span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           </Card>

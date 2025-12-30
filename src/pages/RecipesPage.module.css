@@ -35,6 +35,10 @@
   max-width: 400px;
 }
 
+.filterWrapper {
+  position: relative;
+}
+
 .loading {
   display: flex;
   align-items: center;
