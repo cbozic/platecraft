@@ -1,0 +1,203 @@
+.cell {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-xs);
+  border-right: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  overflow: hidden;
+}
+
+.cell:last-child {
+  border-right: none;
+}
+
+.cell:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.otherMonth {
+  opacity: 0.4;
+  background-color: var(--color-background-secondary);
+}
+
+.today {
+  background-color: var(--color-primary-light);
+}
+
+.today:hover {
+  background-color: var(--color-primary-light);
+}
+
+.weekend .dayNumber {
+  color: var(--color-text-muted);
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--spacing-xs);
+}
+
+.dayNumber {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-full);
+}
+
+.today .dayNumber {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.meals {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+/* Compact mode (month view) */
+.compact .meals {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-start;
+}
+
+.mealDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-primary);
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.mealDot:hover {
+  transform: scale(1.3);
+}
+
+.mealCount {
+  margin-top: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* Full mode (week view) */
+.mealSlot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slotName {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mealCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  background-color: var(--color-primary-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.mealCard:hover {
+  background-color: var(--color-primary);
+}
+
+.mealCard:hover .mealTitle {
+  color: var(--color-text-inverse);
+}
+
+.mealTitle {
+  flex: 1;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.removeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--transition-fast), background-color var(--transition-fast);
+}
+
+.mealCard:hover .removeButton {
+  opacity: 1;
+  color: var(--color-text-inverse);
+}
+
+.removeButton:hover {
+  background-color: var(--color-error);
+}
+
+.addButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 1.5rem;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.cell:hover .addButton {
+  opacity: 1;
+}
+
+.addButton:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
+@media (max-width: 768px) {
+  .cell {
+    padding: 2px;
+  }
+
+  .dayNumber {
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: var(--font-size-xs);
+  }
+
+  .mealDot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .mealCount {
+    display: none;
+  }
+}
