@@ -545,7 +545,7 @@ These features are explicitly NOT included in initial requirements:
 - [x] Recipe source reference fields (cookbook, page, other)
 
 ### In Progress / Remaining
-- [ ] Nutritional information lookup (external API - data structure exists)
+- All core features completed!
 
 ### Recently Completed
 - [x] Recipe search and filtering (full-text search, multi-tag, favorites, prep/cook time, servings)
@@ -558,6 +558,11 @@ These features are explicitly NOT included in initial requirements:
 - [x] Recipe scaling with fraction display (½, ⅔, etc.)
 - [x] Print recipes by date range (with scaled ingredients)
 - [x] Meal Plan Assistant (4-step wizard with ingredient matching and day rules)
+- [x] Nutritional information lookup (USDA FoodData Central API integration)
+- [x] Nutrition facts display on recipe detail page (FDA-style panel)
+- [x] Manual nutrition entry in recipe form
+- [x] Daily calorie goal setting
+- [x] Calculate nutrition from ingredients (auto-sum ingredient nutrition with weight estimation)
 
 **Recipe Import (COMPLETED)**:
 - [x] Import types and settings (API key storage with masked display)
@@ -570,5 +575,5 @@ These features are explicitly NOT included in initial requirements:
 
 ---
 
-*Requirements Version: 1.7*
+*Requirements Version: 1.9*
 *Last Updated: December 31, 2025*

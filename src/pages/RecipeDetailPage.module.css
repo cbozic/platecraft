@@ -206,3 +206,94 @@
 .sourceLink:hover {
   text-decoration: underline;
 }
+
+/* Nutrition Facts Panel */
+.nutritionFacts {
+  border: 2px solid var(--color-text-primary);
+  padding: var(--spacing-md);
+  max-width: 280px;
+}
+
+.nutritionHeader {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.nutritionServing {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 8px solid var(--color-text-primary);
+}
+
+.nutritionCalories {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 4px solid var(--color-text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.nutritionCaloriesLabel {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.nutritionCaloriesValue {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.nutritionRow {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+.nutritionRow:last-child {
+  border-bottom: none;
+}
+
+.nutritionLabel {
+  color: var(--color-text-secondary);
+}
+
+.nutritionLabel.bold {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.nutritionValue {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.nutritionDv {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 4px solid var(--color-text-primary);
+}
+
+.noNutrition {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.noNutritionIcon {
+  opacity: 0.5;
+}

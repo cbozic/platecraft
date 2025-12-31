@@ -36,6 +36,11 @@ export function SettingsPage() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
 
+  // USDA API key state
+  const [usdaKeyInput, setUsdaKeyInput] = useState('');
+  const [showUsdaKey, setShowUsdaKey] = useState(false);
+  const [usdaKeySaved, setUsdaKeySaved] = useState(false);
+
   const loadData = useCallback(async () => {
     try {
       const [settingsData, stats] = await Promise.all([
@@ -47,6 +52,9 @@ export function SettingsPage() {
       // Initialize API key input with masked value if key exists
       if (settingsData.anthropicApiKey) {
         setApiKeyInput(settingsData.anthropicApiKey);
+      }
+      if (settingsData.usdaApiKey) {
+        setUsdaKeyInput(settingsData.usdaApiKey);
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -98,6 +106,28 @@ export function SettingsPage() {
     if (!settings) return;
     await settingsRepository.setPreferredImportMode(mode);
     setSettings({ ...settings, preferredImportMode: mode });
+  };
+
+  const handleSaveUsdaKey = async () => {
+    if (!settings) return;
+    const trimmedKey = usdaKeyInput.trim();
+    await settingsRepository.setUsdaApiKey(trimmedKey || undefined);
+    setSettings({ ...settings, usdaApiKey: trimmedKey || undefined });
+    setUsdaKeySaved(true);
+    setTimeout(() => setUsdaKeySaved(false), 2000);
+  };
+
+  const handleClearUsdaKey = async () => {
+    if (!settings) return;
+    await settingsRepository.setUsdaApiKey(undefined);
+    setSettings({ ...settings, usdaApiKey: undefined });
+    setUsdaKeyInput('');
+  };
+
+  const handleDailyCalorieGoalChange = async (value: number | undefined) => {
+    if (!settings) return;
+    await settingsRepository.setDailyCalorieGoal(value);
+    setSettings({ ...settings, dailyCalorieGoal: value });
   };
 
   const handleExport = async () => {
@@ -331,6 +361,88 @@ export function SettingsPage() {
           </CardHeader>
           <CardBody>
             <TagManager />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className={styles.sectionTitle}>Nutrition</h2>
+          </CardHeader>
+          <CardBody>
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <h3 className={styles.settingLabel}>USDA FoodData Central API Key</h3>
+                <p className={styles.settingDescription}>
+                  Optional. Enables nutrition lookup for ingredients. Get a free API key at{' '}
+                  <a
+                    href="https://fdc.nal.usda.gov/api-key-signup.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    fdc.nal.usda.gov
+                  </a>
+                </p>
+              </div>
+              <div className={styles.apiKeyControl}>
+                <div className={styles.apiKeyInputRow}>
+                  <input
+                    type={showUsdaKey ? 'text' : 'password'}
+                    value={usdaKeyInput}
+                    onChange={(e) => setUsdaKeyInput(e.target.value)}
+                    placeholder="Enter API key..."
+                    className={styles.apiKeyInput}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowUsdaKey(!showUsdaKey)}
+                    className={styles.apiKeyToggle}
+                    aria-label={showUsdaKey ? 'Hide API key' : 'Show API key'}
+                  >
+                    {showUsdaKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <div className={styles.apiKeyActions}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveUsdaKey}
+                    disabled={!usdaKeyInput.trim()}
+                  >
+                    {usdaKeySaved ? 'Saved!' : 'Save Key'}
+                  </Button>
+                  {settings?.usdaApiKey && (
+                    <Button variant="ghost" size="sm" onClick={handleClearUsdaKey}>
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <h3 className={styles.settingLabel}>Daily Calorie Goal</h3>
+                <p className={styles.settingDescription}>
+                  Set your daily calorie target for meal planning reference
+                </p>
+              </div>
+              <div className={styles.settingControl}>
+                <input
+                  type="number"
+                  min="0"
+                  max="10000"
+                  step="50"
+                  value={settings.dailyCalorieGoal || ''}
+                  onChange={(e) => {
+                    const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                    handleDailyCalorieGoalChange(value);
+                  }}
+                  placeholder="2000"
+                  className={styles.numberInput}
+                  style={{ width: '100px' }}
+                />
+              </div>
+            </div>
           </CardBody>
         </Card>
 

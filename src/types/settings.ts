@@ -29,6 +29,9 @@ export interface UserSettings {
   // Recipe Import Settings
   anthropicApiKey?: string; // Stored locally, never sent anywhere except Anthropic
   preferredImportMode?: AiParsingMode; // 'api' or 'manual'
+
+  // Nutrition API Settings
+  usdaApiKey?: string; // USDA FoodData Central API key
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {

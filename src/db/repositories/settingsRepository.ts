@@ -175,6 +175,21 @@ export const settingsRepository = {
     return settings.preferredImportMode || 'manual';
   },
 
+  // USDA API key
+  async setUsdaApiKey(apiKey: string | undefined): Promise<void> {
+    await this.update({ usdaApiKey: apiKey });
+  },
+
+  async getUsdaApiKey(): Promise<string | undefined> {
+    const settings = await this.get();
+    return settings.usdaApiKey;
+  },
+
+  async hasUsdaApiKey(): Promise<boolean> {
+    const apiKey = await this.getUsdaApiKey();
+    return !!apiKey && apiKey.length > 0;
+  },
+
   // Reset to defaults
   async reset(): Promise<void> {
     await db.settings.put({ ...DEFAULT_SETTINGS, id: SETTINGS_ID });

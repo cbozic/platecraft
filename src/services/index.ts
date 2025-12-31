@@ -7,3 +7,11 @@ export { ocrService } from './ocrService';
 export type { OcrResult, OcrProgress, OcrQualityAssessment } from './ocrService';
 export { imageService } from './imageService';
 export { icalService } from './icalService';
+export { nutritionService } from './nutritionService';
+export type {
+  FoodSearchResult,
+  FoodNutrient,
+  FoodDetail,
+  NutritionSearchOptions,
+  NutritionServiceError,
+} from './nutritionService';

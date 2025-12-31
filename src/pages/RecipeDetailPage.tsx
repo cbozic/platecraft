@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Heart, Clock, Users, Book, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Heart, Clock, Users, Book, Link as LinkIcon, Apple } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import { ImageGallery, ServingsScaler } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
@@ -255,6 +255,69 @@ export function RecipeDetailPage() {
               </div>
             </Card>
           )}
+
+          <Card>
+            <div className={styles.section}>
+              <h2 className={styles.sectionTitle}>Nutrition Facts</h2>
+              {recipe.nutrition ? (
+                <div className={styles.nutritionFacts}>
+                  <h3 className={styles.nutritionHeader}>Nutrition Facts</h3>
+                  <p className={styles.nutritionServing}>
+                    Per serving ({scaledServings ?? recipe.servings} servings per recipe)
+                  </p>
+                  <div className={styles.nutritionCalories}>
+                    <span className={styles.nutritionCaloriesLabel}>Calories</span>
+                    <span className={styles.nutritionCaloriesValue}>
+                      {Math.round(recipe.nutrition.calories * scaleFactor / recipe.servings)}
+                    </span>
+                  </div>
+                  <div className={styles.nutritionRow}>
+                    <span className={`${styles.nutritionLabel} ${styles.bold}`}>Total Fat</span>
+                    <span className={styles.nutritionValue}>
+                      {Math.round(recipe.nutrition.fat * scaleFactor / recipe.servings * 10) / 10}g
+                    </span>
+                  </div>
+                  <div className={styles.nutritionRow}>
+                    <span className={`${styles.nutritionLabel} ${styles.bold}`}>Sodium</span>
+                    <span className={styles.nutritionValue}>
+                      {Math.round(recipe.nutrition.sodium * scaleFactor / recipe.servings)}mg
+                    </span>
+                  </div>
+                  <div className={styles.nutritionRow}>
+                    <span className={`${styles.nutritionLabel} ${styles.bold}`}>Total Carbohydrate</span>
+                    <span className={styles.nutritionValue}>
+                      {Math.round(recipe.nutrition.carbohydrates * scaleFactor / recipe.servings * 10) / 10}g
+                    </span>
+                  </div>
+                  <div className={styles.nutritionRow}>
+                    <span className={styles.nutritionLabel}>Dietary Fiber</span>
+                    <span className={styles.nutritionValue}>
+                      {Math.round(recipe.nutrition.fiber * scaleFactor / recipe.servings * 10) / 10}g
+                    </span>
+                  </div>
+                  <div className={styles.nutritionRow}>
+                    <span className={`${styles.nutritionLabel} ${styles.bold}`}>Protein</span>
+                    <span className={styles.nutritionValue}>
+                      {Math.round(recipe.nutrition.protein * scaleFactor / recipe.servings * 10) / 10}g
+                    </span>
+                  </div>
+                  <p className={styles.nutritionDv}>
+                    * Percent Daily Values are based on a 2,000 calorie diet.
+                  </p>
+                </div>
+              ) : (
+                <div className={styles.noNutrition}>
+                  <Apple size={48} className={styles.noNutritionIcon} />
+                  <p>No nutrition information available</p>
+                  <Link to={`/recipes/${recipe.id}/edit`}>
+                    <Button variant="outline" size="sm">
+                      Add Nutrition Info
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
       </div>
     </div>

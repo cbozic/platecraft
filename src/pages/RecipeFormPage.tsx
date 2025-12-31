@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { Button, Input, Card, CardBody } from '@/components/ui';
-import { ImageGallery, ImageUploader } from '@/components/recipe';
+import { ImageGallery, ImageUploader, NutritionLookup, IngredientNutritionCalculator } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
-import type { Tag, Ingredient, RecipeImage } from '@/types';
+import type { Tag, Ingredient, RecipeImage, NutritionInfo } from '@/types';
 import { UNIT_INFO } from '@/types/units';
 import { DEFAULT_STORE_SECTIONS } from '@/types';
 import styles from './RecipeFormPage.module.css';
@@ -41,6 +41,15 @@ export function RecipeFormPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [images, setImages] = useState<RecipeImage[]>([]);
+  const [hasNutrition, setHasNutrition] = useState(false);
+  const [nutrition, setNutrition] = useState<NutritionInfo>({
+    calories: 0,
+    protein: 0,
+    carbohydrates: 0,
+    fat: 0,
+    fiber: 0,
+    sodium: 0,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,6 +77,10 @@ export function RecipeFormPage() {
             setReferenceOther(recipe.referenceOther || '');
             setSelectedTags(recipe.tags);
             setImages(recipe.images || []);
+            if (recipe.nutrition) {
+              setHasNutrition(true);
+              setNutrition(recipe.nutrition);
+            }
           }
         } else if (isImporting) {
           // Loading imported recipe from sessionStorage
@@ -167,7 +180,7 @@ export function RecipeFormPage() {
         referenceCookbook: referenceCookbook.trim(),
         referencePageNumber: referencePageNumber || null,
         referenceOther: referenceOther.trim(),
-        nutrition: null,
+        nutrition: hasNutrition ? nutrition : null,
         images,
       };
 
@@ -433,6 +446,151 @@ export function RecipeFormPage() {
                 placeholder="Magazine, family recipe, etc."
                 fullWidth
               />
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardBody>
+            <div className={styles.formSection}>
+              <h2 className={styles.sectionTitle}>Nutrition Information</h2>
+              <div className={styles.nutritionToggle}>
+                <input
+                  type="checkbox"
+                  id="hasNutrition"
+                  checked={hasNutrition}
+                  onChange={(e) => setHasNutrition(e.target.checked)}
+                />
+                <label htmlFor="hasNutrition">
+                  Add nutrition information (per serving)
+                </label>
+              </div>
+              {hasNutrition && (
+                <>
+                  <div className={styles.nutritionGrid}>
+                    <div className={styles.nutritionField}>
+                      <label className={styles.nutritionLabel}>
+                        Calories <span className={styles.nutritionUnit}>(kcal)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={nutrition.calories || ''}
+                        onChange={(e) =>
+                          setNutrition({
+                            ...nutrition,
+                            calories: e.target.value ? parseInt(e.target.value, 10) : 0,
+                          })
+                        }
+                        className={styles.nutritionInput}
+                      />
+                    </div>
+                    <div className={styles.nutritionField}>
+                      <label className={styles.nutritionLabel}>
+                        Protein <span className={styles.nutritionUnit}>(g)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={nutrition.protein || ''}
+                        onChange={(e) =>
+                          setNutrition({
+                            ...nutrition,
+                            protein: e.target.value ? parseFloat(e.target.value) : 0,
+                          })
+                        }
+                        className={styles.nutritionInput}
+                      />
+                    </div>
+                    <div className={styles.nutritionField}>
+                      <label className={styles.nutritionLabel}>
+                        Carbohydrates <span className={styles.nutritionUnit}>(g)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={nutrition.carbohydrates || ''}
+                        onChange={(e) =>
+                          setNutrition({
+                            ...nutrition,
+                            carbohydrates: e.target.value ? parseFloat(e.target.value) : 0,
+                          })
+                        }
+                        className={styles.nutritionInput}
+                      />
+                    </div>
+                    <div className={styles.nutritionField}>
+                      <label className={styles.nutritionLabel}>
+                        Fat <span className={styles.nutritionUnit}>(g)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={nutrition.fat || ''}
+                        onChange={(e) =>
+                          setNutrition({
+                            ...nutrition,
+                            fat: e.target.value ? parseFloat(e.target.value) : 0,
+                          })
+                        }
+                        className={styles.nutritionInput}
+                      />
+                    </div>
+                    <div className={styles.nutritionField}>
+                      <label className={styles.nutritionLabel}>
+                        Fiber <span className={styles.nutritionUnit}>(g)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={nutrition.fiber || ''}
+                        onChange={(e) =>
+                          setNutrition({
+                            ...nutrition,
+                            fiber: e.target.value ? parseFloat(e.target.value) : 0,
+                          })
+                        }
+                        className={styles.nutritionInput}
+                      />
+                    </div>
+                    <div className={styles.nutritionField}>
+                      <label className={styles.nutritionLabel}>
+                        Sodium <span className={styles.nutritionUnit}>(mg)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={nutrition.sodium || ''}
+                        onChange={(e) =>
+                          setNutrition({
+                            ...nutrition,
+                            sodium: e.target.value ? parseInt(e.target.value, 10) : 0,
+                          })
+                        }
+                        className={styles.nutritionInput}
+                      />
+                    </div>
+                  </div>
+                  <div className={styles.nutritionActions}>
+                    <IngredientNutritionCalculator
+                      ingredients={ingredients.filter((i): i is Ingredient => 'id' in i && !!i.name.trim())}
+                      servings={servings}
+                      onCalculate={(nutritionData) => setNutrition(nutritionData)}
+                    />
+                    <NutritionLookup
+                      onSelect={(nutritionData) => setNutrition(nutritionData)}
+                      ingredientName={title}
+                    />
+                    <p className={styles.nutritionHelp}>
+                      Calculate from ingredients (recommended), or look up a single food item.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </CardBody>
         </Card>
