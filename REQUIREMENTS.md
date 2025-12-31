@@ -107,7 +107,7 @@ System-provided tags (users cannot delete, but can hide):
 - Original image optionally attached to recipe
 
 ### 2.7 Recipe Import Methods
-Three methods for importing recipes into the system:
+Four methods for importing recipes into the system:
 
 **Photo Import**:
 - Upload image of recipe (cookbook page, recipe card, handwritten)
@@ -126,6 +126,38 @@ Three methods for importing recipes into the system:
 - Paste recipe text from any source (email, message, document)
 - AI parses into structured recipe fields
 - Supports various formats (ingredient lists, numbered steps, etc.)
+
+**Bulk Import**:
+- Automated search of AllRecipes, Food Network, and Epicurious
+- Configurable options:
+  - Recipe sites (select multiple)
+  - Protein categories: Beef, Chicken, Pork, Vegetarian
+  - Recipe count per category (default 10, max 50)
+  - Low Fat filter (checkbox, default enabled)
+- Search methodology:
+  - **AllRecipes & Food Network**: Direct category page scraping with extraction of embedded JSON-LD/schema.org data
+  - **Epicurious**: DuckDuckGo search with site-specific filtering (due to CORS restrictions on direct scraping)
+  - Supports multiple extraction patterns for resilience
+- Rating-based sorting:
+  - Prioritizes top-rated recipes when ratings available
+  - Falls back to first N results if ratings unavailable
+- Nutrition extraction:
+  - Attempts to extract schema.org Recipe JSON-LD data
+  - Falls back to HTML parsing of nutrition tables
+  - Uses USDA API for calculation if direct extraction unavailable
+- Multi-step workflow:
+  - Step 1: Configuration selection
+  - Step 2: Searching (with progress tracking)
+  - Step 3: Importing (with per-recipe progress)
+  - Step 4: Preview grid with select/deselect capability
+  - Step 5: Batch save with duplicate detection
+  - Step 6: Completion confirmation
+- Features:
+  - Cancellation support at any stage
+  - Duplicate detection (see section 2.9)
+  - Automatic tag scanning (see section 2.10)
+  - All imported recipes tagged with "bulk-import" for easy identification
+  - Responsive preview cards showing: title, site, protein category, rating, servings, prep/cook times, nutrition badge
 
 All import methods show a preview/edit form before final save.
 
@@ -152,6 +184,71 @@ AI is used for:
 - Identifying recipe metadata (servings, description)
 
 Manual mode always available as fallback if API is unavailable or rate limited.
+
+### 2.9 Duplicate Detection
+
+**During Bulk Import**:
+- Prevents importing duplicate recipes into the database
+- Detection criteria:
+  - **Exact title match**: Case-insensitive comparison of recipe titles
+  - **Source URL match**: Checks if the recipe's source URL is already in the database
+- Detection timing:
+  - Occurs during the import preview stage
+  - Duplicates are visually marked or filtered
+  - User is alerted to duplicates and can choose to:
+    - Skip the duplicate
+    - Force import if needed
+- Applies to:
+  - All import methods (Photo, URL, Text, Bulk)
+  - Especially important for bulk import due to volume
+
+**User Experience**:
+- If duplicate detected, preview shows warning badge
+- User can deselect duplicate recipe before saving
+- Detailed message indicates why recipe was flagged as duplicate (matching title or URL)
+- Link to existing recipe for comparison
+
+### 2.10 Automatic Tag Scanning
+
+**Purpose**:
+Auto-apply system tags to imported recipes based on content analysis using fuzzy matching algorithms.
+
+**Scannable System Tags**:
+1. **Quick Prep** - Recipes with prep time < 15 minutes, OR text contains keywords: "quick", "easy", "fast", "minute", "speed", "rapid"
+2. **Slow Cooker** - Text contains: "slow cooker", "slowcooker", "crock pot", "crockpot"
+3. **Instant Pot** - Text contains: "instant pot", "instantpot", "pressure cook"
+4. **One Pot** - Text contains: "one pot", "onepot", "one-pot", "single pan", "all in one"
+5. **Meal Prep Friendly** - Text contains: "meal prep", "make ahead", "batch cook", "freezer", "reheats well"
+6. **Freezer Friendly** - Text contains: "freeze", "freezer", "frozen", "make ahead and freeze"
+7. **Kid Friendly** - Text contains: "kid", "family", "children", "toddler", "easy", "mild flavors"
+8. **Vegetarian** - Ingredient list contains no meat/poultry/seafood, OR text contains "vegetarian"
+9. **Vegan** - Ingredient list contains no animal products, OR text contains "vegan"
+10. **Gluten Free** - Text contains: "gluten free", "glutenfree", "no gluten"
+11. **Dairy Free** - Ingredient list contains no dairy, OR text contains: "dairy free", "dairyfree"
+12. **Low Carb** - Text contains: "low carb", "lowcarb", "keto", "paleo"
+13. **High Protein** - Nutrition info shows protein > 30g per serving, OR text contains: "high protein", "protein-packed"
+14. **Budget Friendly** - Text contains: "budget", "cheap", "inexpensive", "economical", "thrifty"
+15. **Breakfast** - Ingredients or title contain: "egg", "pancake", "waffle", "cereal", "oatmeal", "toast"
+16. **Lunch** - Title or text contains: "sandwich", "salad", "wrap"
+17. **Dinner** - Automatically applied to most recipes unless other meal type detected
+18. **Dessert** - Text contains: "dessert", "cake", "cookie", "brownie", "pie", "chocolate", "sweet"
+19. **Snack** - Ingredients or text contain: "snack", "appetizer", "dip", "trail mix"
+20. **Appetizer** - Text contains: "appetizer", "starter", "hors d'oeuvre"
+
+**Implementation Details**:
+- Fuzzy matching with configurable threshold (default 80% match)
+- Scans recipe title, description, ingredients list, and instructions
+- Case-insensitive matching
+- Applied automatically during import (before preview save)
+- Multiple tags can be applied to single recipe
+- User can remove auto-applied tags in preview before saving
+- Tags are applied in addition to any import-specific tags (e.g., "bulk-import")
+
+**Sources for Tag Detection**:
+1. Parsed recipe fields (title, description, instructions, ingredient names)
+2. Nutrition information (for High Protein, etc.)
+3. Ingredient composition analysis (for Vegetarian, Vegan, Dairy Free)
+4. Cooking time analysis (for Quick Prep)
 
 ---
 

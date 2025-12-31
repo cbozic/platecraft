@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Camera, Link as LinkIcon, FileText } from 'lucide-react';
+import { ArrowLeft, Camera, Link as LinkIcon, FileText, Database } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui';
-import { TextImportTab, UrlImportTab, PhotoImportTab } from '@/components/import';
+import { TextImportTab, UrlImportTab, PhotoImportTab, BulkImportTab } from '@/components/import';
 import type { ImportMethod } from '@/types';
 import styles from './ImportRecipePage.module.css';
 
@@ -10,6 +10,7 @@ const TABS: { id: ImportMethod; label: string; icon: React.ReactNode }[] = [
   { id: 'photo', label: 'Photo', icon: <Camera size={20} /> },
   { id: 'url', label: 'URL', icon: <LinkIcon size={20} /> },
   { id: 'text', label: 'Text', icon: <FileText size={20} /> },
+  { id: 'bulk', label: 'Bulk Import', icon: <Database size={20} /> },
 ];
 
 export function ImportRecipePage() {
@@ -23,6 +24,8 @@ export function ImportRecipePage() {
         return <UrlImportTab />;
       case 'text':
         return <TextImportTab />;
+      case 'bulk':
+        return <BulkImportTab />;
       default:
         return null;
     }
@@ -71,6 +74,9 @@ export function ImportRecipePage() {
           </li>
           <li>
             <strong>Text:</strong> Paste recipe text and AI will parse it into structured fields
+          </li>
+          <li>
+            <strong>Bulk Import:</strong> Automatically search and import multiple low-fat recipes from popular sites
           </li>
         </ul>
         <p>

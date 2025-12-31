@@ -1,6 +1,7 @@
 /**
  * Types for recipe import functionality
  */
+import type { NutritionInfo } from './recipe';
 
 /**
  * A parsed ingredient from imported recipe text
@@ -27,6 +28,7 @@ export interface ParsedRecipe {
   cookTimeMinutes?: number;
   sourceUrl?: string;
   tags?: string[];
+  nutrition?: NutritionInfo;
 }
 
 /**
@@ -42,7 +44,7 @@ export interface RecipeImportResult {
 /**
  * Import method types
  */
-export type ImportMethod = 'photo' | 'url' | 'text';
+export type ImportMethod = 'photo' | 'url' | 'text' | 'bulk';
 
 /**
  * AI parsing mode

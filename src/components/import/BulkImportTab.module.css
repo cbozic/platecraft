@@ -1,0 +1,480 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+
+/* Configuration Section */
+.configSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.configSection h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.instruction {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.configGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.configLabel {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.checkboxGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkbox:hover {
+  border-color: var(--primary-color);
+  background: var(--background-hover);
+}
+
+.checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.checkbox span {
+  font-size: 0.9375rem;
+}
+
+.numberInput {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  max-width: 150px;
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--error-background, #fee);
+  border: 1px solid var(--error-color, #f44);
+  border-radius: 0.5rem;
+  color: var(--error-color, #f44);
+}
+
+/* Processing States */
+.processing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.processing h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.processing p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  color: var(--primary-color);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.progressBar {
+  width: 100%;
+  max-width: 400px;
+  height: 8px;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--primary-color);
+  transition: width 0.3s ease;
+}
+
+.progressText {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.statsText {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.successIcon {
+  color: var(--success-color, #4caf50);
+}
+
+.errorIcon {
+  color: var(--error-color, #f44);
+}
+
+/* Preview Section */
+.previewSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.previewHeader h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.previewControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem;
+  background: var(--background-secondary);
+  border-radius: 0.5rem;
+}
+
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filterSelect {
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  background: var(--background);
+  cursor: pointer;
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.selectionControls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.selectionCount {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Recipe Grid */
+.recipeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.recipeCard {
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  border: 2px solid var(--border-color);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recipeCard:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.recipeCardSelected {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+}
+
+.recipeCardSelected .recipeCardHeader,
+.recipeCardSelected .recipeCardBody,
+.recipeCardSelected .recipeTitle,
+.recipeCardSelected .recipeMeta,
+.recipeCardSelected .recipeMeta span,
+.recipeCardSelected .badge,
+.recipeCardSelected .rating,
+.recipeCardSelected .rating span {
+  color: white;
+}
+
+.recipeCardSelected .badge {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.recipeCardSelected .badgeNutrition {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.recipeCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+}
+
+.recipeCheckbox {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.rating {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--warning-color, #f90);
+}
+
+.recipeThumbnail {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--background-secondary);
+}
+
+.recipeThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.recipeCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.recipeTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.recipeBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.badge {
+  padding: 0.25rem 0.625rem;
+  background: var(--background-secondary);
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.badgeNutrition {
+  padding: 0.25rem 0.625rem;
+  background: var(--success-background, #e8f5e9);
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--success-color, #4caf50);
+}
+
+.recipeMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Empty State */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.emptyState svg {
+  opacity: 0.5;
+}
+
+/* Failed Section */
+.failedSection {
+  padding: 1rem;
+  background: var(--warning-background, #fff3e0);
+  border: 1px solid var(--warning-color, #f90);
+  border-radius: 0.5rem;
+}
+
+.failedSection h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: var(--warning-color, #f90);
+}
+
+/* Success Section */
+.successSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.successSection h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.successSection p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1.0625rem;
+}
+
+.successIconLarge {
+  color: var(--success-color, #4caf50);
+}
+
+/* Error Section */
+.errorSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.errorSection h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.errorMessage {
+  margin: 0;
+  color: var(--error-color, #f44);
+  font-size: 1rem;
+}
+
+.errorIconLarge {
+  color: var(--error-color, #f44);
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .recipeGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .previewControls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterGroup,
+  .selectionControls {
+    justify-content: space-between;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .actions button {
+    flex: 1;
+  }
+}
