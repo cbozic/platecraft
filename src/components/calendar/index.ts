@@ -2,3 +2,7 @@ export { CalendarGrid } from './CalendarGrid';
 export { WeekView } from './WeekView';
 export { DayCell } from './DayCell';
 export { RecipePicker } from './RecipePicker';
+export { ExternalEventCard } from './ExternalEventCard';
+export { PrintRecipesDatePicker } from './PrintRecipesDatePicker';
+export { PrintableRecipe } from './PrintableRecipe';
+export { PrintRecipesView } from './PrintRecipesView';

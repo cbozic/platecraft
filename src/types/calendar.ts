@@ -1,4 +1,5 @@
-export type CalendarProvider = 'google' | 'ical';
+export type CalendarProvider = 'ical';
+export type CalendarSourceType = 'url' | 'file';
 
 export interface ExternalCalendar {
   id: string;
@@ -6,11 +7,13 @@ export interface ExternalCalendar {
   provider: CalendarProvider;
   color: string;
   isVisible: boolean;
-  // For Google OAuth
-  googleCalendarId?: string;
-  // For iCal URL import
+  sourceType: CalendarSourceType;
+  // For iCal URL subscriptions
   icalUrl?: string;
   lastSynced?: Date;
+  // For file imports
+  originalFileName?: string;
+  lastImported?: Date;
 }
 
 export interface ExternalEvent {

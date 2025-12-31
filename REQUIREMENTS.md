@@ -14,7 +14,6 @@
 - **External APIs**:
   - OCR service (Tesseract.js or cloud API) for recipe image scanning
   - Nutritional database API (USDA FoodData Central or Nutritionix)
-  - Google Calendar API (OAuth 2.0)
   - Apple Calendar (via iCal URL import)
 
 ### 1.2 Device Support
@@ -242,16 +241,19 @@ Supported unit systems: US Customary, Metric, UK Imperial
 - Notes on specific days (not tied to recipes)
 
 ### 5.3 External Calendar Integration
-**Google Calendar**:
-- OAuth 2.0 authentication flow
+**Calendar Integration**:
 - Read-only access to user's calendars
-- Display Google events alongside meal plans
-- User selects which Google calendars to show
-
-**Apple Calendar / Other**:
 - iCal URL import (paste shareable calendar link)
-- Periodic refresh of iCal data
+- iCal file import (.ics files from local computer)
+  - Smart deduplication when re-importing updated files (by event UID)
+  - Option to update existing calendar or create new one
+- Display events alongside meal plans
+- User selects which calendars to show
+- Periodic refresh of iCal URL data
 - Display external events alongside meal plans
+
+**Meal Export**:
+- Export planned meals to .ics file for import into other calendar apps
 
 ### 5.4 Calendar Display
 - Meal plans shown prominently
@@ -261,6 +263,39 @@ Supported unit systems: US Customary, Metric, UK Imperial
 - Color coding for different meal types
 - Visual indicator for days with shopping needs
 - Print-friendly layout for both views
+
+### 5.5 Meal Plan Assistant (Intelligent Planning)
+Four-step wizard for intelligent meal planning based on available ingredients:
+
+**Step 1 - Ingredients Input**:
+- List ingredients currently on hand
+- Simple text input with add/remove capability
+- Used for recipe matching in later steps
+
+**Step 2 - Day Rules**:
+- Set tag preferences for specific days (e.g., "Taco Tuesday")
+- Select from existing recipe tags
+- Optional - can skip for fully automatic suggestions
+
+**Step 3 - Date Range & Slots**:
+- Select week to plan
+- Choose which meal slots to fill (Breakfast, Lunch, Dinner, etc.)
+- Preview calendar for selected dates
+
+**Step 4 - Preview & Approval**:
+- Review AI-suggested meal plan
+- See ingredient coverage statistics
+- Swap individual meals with alternatives
+- Lock preferred meals to prevent changes
+- Reject meals to remove from plan
+- Apply approved plan to calendar
+
+**Algorithm Features**:
+- Fuzzy string matching (Levenshtein distance) for ingredient matching
+- Unit conversion for quantity tracking
+- Tag-based recipe filtering for day rules
+- Fallback to random selection when no matches
+- Tracks ingredient usage across multiple recipes
 
 ---
 
@@ -356,6 +391,11 @@ Supported unit systems: US Customary, Metric, UK Imperial
 - Calendar month view
 - Calendar week view
 - Shopping list
+- **Recipes by date range**: Print full recipes for all planned meals within a selected date range
+  - Grouped by day with date headers
+  - Sorted by meal slot order (Breakfast, Lunch, Dinner, etc.)
+  - Ingredients scaled to planned serving sizes
+  - Includes recipe instructions and notes
 
 ### 8.2 Print Options
 - Include/exclude images
@@ -505,25 +545,30 @@ These features are explicitly NOT included in initial requirements:
 - [x] Recipe source reference fields (cookbook, page, other)
 
 ### In Progress / Remaining
-- [ ] Recipe search and filtering
-- [ ] Favorites/starred recipes
-- [ ] Meal slot customization in settings
-- [ ] Google Calendar integration (OAuth 2.0)
-- [ ] iCal URL import
-- [ ] Nutritional information lookup
-- [ ] Unit conversion utilities
-- [ ] Print functionality for recipes
+- [ ] Nutritional information lookup (external API - data structure exists)
 
-**Recipe Import (NEW)**:
-- [ ] Import types and settings (API key storage)
-- [ ] Import page with Photo/URL/Text tabs
-- [ ] Text paste import with AI parsing
-- [ ] Manual paste flow (copy prompt to Claude, paste response back)
-- [ ] API integration (Claude API when key configured)
-- [ ] URL import with schema.org parsing + CORS proxy
-- [ ] Photo import with Tesseract.js OCR
+### Recently Completed
+- [x] Recipe search and filtering (full-text search, multi-tag, favorites, prep/cook time, servings)
+- [x] Favorites/starred recipes with toggle and filtering
+- [x] Meal slot customization in settings
+- [x] iCal URL subscription import
+- [x] iCal file import (.ics) with deduplication
+- [x] Export meals to .ics file
+- [x] Unit system support (US/Metric/UK) with smart formatting
+- [x] Recipe scaling with fraction display (½, ⅔, etc.)
+- [x] Print recipes by date range (with scaled ingredients)
+- [x] Meal Plan Assistant (4-step wizard with ingredient matching and day rules)
+
+**Recipe Import (COMPLETED)**:
+- [x] Import types and settings (API key storage with masked display)
+- [x] Import page with Photo/URL/Text tabs
+- [x] Text paste import with AI parsing
+- [x] Manual paste flow (copy prompt to Claude, paste response back)
+- [x] API integration (Claude Sonnet via Anthropic API)
+- [x] URL import with schema.org parsing + CORS proxy fallback
+- [x] Photo import with Tesseract.js OCR + vision mode fallback
 
 ---
 
-*Requirements Version: 1.3*
-*Last Updated: December 30, 2025*
+*Requirements Version: 1.7*
+*Last Updated: December 31, 2025*

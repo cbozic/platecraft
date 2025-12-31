@@ -1,0 +1,167 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  color: var(--color-primary);
+}
+
+.header > div {
+  flex: 1;
+}
+
+.title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.ingredientRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-surface-elevated);
+  border-radius: var(--radius-sm);
+}
+
+.ingredientInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.quantity {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  min-width: 60px;
+}
+
+.name {
+  color: var(--color-text-primary);
+}
+
+.removeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.removeButton:hover {
+  background-color: var(--color-error-light, rgba(239, 68, 68, 0.1));
+  color: var(--color-error);
+}
+
+.addForm {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.inputGroup {
+  display: flex;
+  flex: 1;
+  gap: var(--spacing-xs);
+}
+
+.quantityInput {
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.unitSelect {
+  width: 100px;
+  flex-shrink: 0;
+  padding: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.unitSelect:hover {
+  border-color: var(--color-border-hover);
+}
+
+.unitSelect:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
+.nameInput {
+  flex: 1;
+  min-width: 150px;
+}
+
+.emptyNote {
+  padding: var(--spacing-md);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  text-align: center;
+}
+
+.emptyNote p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .addForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inputGroup {
+    flex-wrap: wrap;
+  }
+
+  .quantityInput {
+    width: 60px;
+  }
+
+  .unitSelect {
+    flex: 1;
+    min-width: 80px;
+  }
+
+  .nameInput {
+    width: 100%;
+    min-width: unset;
+  }
+}

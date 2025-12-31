@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { Button, Card, CardHeader, CardBody, Modal, ModalFooter } from '@/components/ui';
-import { TagManager } from '@/components/settings';
+import { TagManager, CalendarSettings } from '@/components/settings';
 import { settingsRepository } from '@/db';
 import { dataService, type ImportResult } from '@/services';
 import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport, AiParsingMode } from '@/types';
@@ -313,6 +313,15 @@ export function SettingsPage() {
                 </select>
               </div>
             </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className={styles.sectionTitle}>Calendar Integration</h2>
+          </CardHeader>
+          <CardBody>
+            <CalendarSettings />
           </CardBody>
         </Card>
 

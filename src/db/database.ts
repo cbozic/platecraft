@@ -8,6 +8,7 @@ import type {
   ShoppingList,
   ShoppingItem,
   ExternalCalendar,
+  ExternalEvent,
   UserSettings,
 } from '@/types';
 import { SYSTEM_TAGS } from '@/types/tags';
@@ -23,6 +24,7 @@ export class PlatecraftDatabase extends Dexie {
   shoppingLists!: Table<ShoppingList, string>;
   shoppingItems!: Table<ShoppingItem, string>;
   externalCalendars!: Table<ExternalCalendar, string>;
+  externalEvents!: Table<ExternalEvent, string>;
   settings!: Table<UserSettings & { id: string }, string>;
 
   constructor() {
@@ -37,6 +39,20 @@ export class PlatecraftDatabase extends Dexie {
       shoppingLists: 'id, createdAt',
       shoppingItems: 'id, shoppingListId, isChecked, storeSection',
       externalCalendars: 'id, provider',
+      settings: 'id',
+    });
+
+    // Version 2: Add external events for iCal support
+    this.version(2).stores({
+      recipes: 'id, title, *tags, isFavorite, createdAt, updatedAt',
+      tags: 'id, name, isSystem',
+      plannedMeals: 'id, date, slotId, recipeId, [date+slotId]',
+      dayNotes: 'id, date',
+      recurringMeals: 'id, recipeId, dayOfWeek, slotId',
+      shoppingLists: 'id, createdAt',
+      shoppingItems: 'id, shoppingListId, isChecked, storeSection',
+      externalCalendars: 'id, provider',
+      externalEvents: 'id, calendarId, [calendarId+startTime]',
       settings: 'id',
     });
   }
@@ -62,6 +78,25 @@ export class PlatecraftDatabase extends Dexie {
         ...DEFAULT_SETTINGS,
         id: 'user-settings',
       });
+    }
+
+    // Migrate existing calendars to have sourceType
+    await this.migrateCalendarSourceTypes();
+  }
+
+  async migrateCalendarSourceTypes(): Promise<void> {
+    const calendarsWithoutType = await this.externalCalendars
+      .filter((c) => !c.sourceType)
+      .toArray();
+
+    if (calendarsWithoutType.length > 0) {
+      console.log(`Migrating ${calendarsWithoutType.length} calendars to add sourceType`);
+      await this.externalCalendars.bulkPut(
+        calendarsWithoutType.map((c) => ({
+          ...c,
+          sourceType: c.icalUrl ? 'url' : 'file',
+        }))
+      );
     }
   }
 

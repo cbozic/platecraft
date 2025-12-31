@@ -1,0 +1,63 @@
+/* Hidden on screen, visible only when printing */
+.container {
+  display: none;
+}
+
+@media print {
+  .container {
+    display: block;
+    padding: 0;
+    background: white;
+    color: black;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #000;
+}
+
+.title {
+  margin: 0;
+  font-size: 18pt;
+  font-weight: bold;
+}
+
+.dateRange {
+  margin: 0.5rem 0 0 0;
+  font-size: 11pt;
+  color: #444;
+}
+
+.daySection {
+  margin-bottom: 1.5rem;
+}
+
+.pageBreak {
+  page-break-before: always;
+}
+
+.dayHeader {
+  margin: 0 0 1rem 0;
+  padding: 0.5rem;
+  font-size: 14pt;
+  font-weight: bold;
+  background: #eee;
+  border-left: 4px solid #333;
+}
+
+/* Print-specific adjustments */
+@media print {
+  .daySection {
+    break-inside: avoid-page;
+  }
+
+  .dayHeader {
+    background: #eee !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

@@ -1,0 +1,105 @@
+/* Compact mode (month view) - similar to mealLabel */
+.eventLabelCompact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  cursor: default;
+  overflow: hidden;
+  opacity: 0.75;
+}
+
+.eventDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+}
+
+.eventTitle {
+  flex: 1;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+}
+
+.eventTime {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+}
+
+/* Full mode (week view) */
+.eventCard {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  background-color: var(--color-surface-elevated);
+  border-left: 3px solid;
+  border-radius: var(--radius-sm);
+  opacity: 0.85;
+}
+
+.eventCardContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.eventCardTitle {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eventCardTime {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+}
+
+.allDayBadge {
+  font-size: 0.6rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background-color: var(--color-surface);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+}
+
+@media (max-width: 768px) {
+  .eventDot {
+    width: 5px;
+    height: 5px;
+  }
+
+  .eventTitle {
+    font-size: 0.65rem;
+  }
+
+  .eventTime {
+    display: none;
+  }
+}
+
+@media print {
+  .eventLabelCompact,
+  .eventCard {
+    opacity: 0.6;
+  }
+
+  .eventTitle,
+  .eventCardTitle {
+    color: #666;
+  }
+}

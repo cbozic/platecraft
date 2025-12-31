@@ -1,0 +1,118 @@
+.recipe {
+  margin-bottom: 1.5rem;
+  page-break-inside: avoid;
+}
+
+.header {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #ccc;
+}
+
+.slotLabel {
+  display: block;
+  font-size: 10pt;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 14pt;
+  font-weight: bold;
+  color: #000;
+}
+
+.meta {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.25rem;
+  font-size: 9pt;
+  color: #666;
+}
+
+.servings {
+  font-weight: 500;
+}
+
+.scaled {
+  font-weight: normal;
+  font-style: italic;
+}
+
+.time {
+  font-style: italic;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sectionTitle {
+  margin: 0 0 0.25rem 0;
+  font-size: 10pt;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ingredientsSection {
+  break-inside: avoid;
+}
+
+.ingredientsList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: 1.5rem;
+}
+
+.ingredient {
+  break-inside: avoid;
+  margin-bottom: 0.2rem;
+  font-size: 10pt;
+  line-height: 1.4;
+}
+
+.instructionsSection {
+  break-inside: avoid;
+}
+
+.instructions {
+  white-space: pre-wrap;
+  font-size: 10pt;
+  line-height: 1.5;
+}
+
+.notesSection {
+  break-inside: avoid;
+  padding: 0.5rem;
+  background: #f5f5f5;
+  border-left: 3px solid #ccc;
+}
+
+.notes {
+  font-size: 9pt;
+  font-style: italic;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.mealNotes {
+  font-size: 9pt;
+  line-height: 1.4;
+  margin-top: 0.25rem;
+}
+
+/* Single column on narrow prints */
+@media print and (max-width: 5in) {
+  .ingredientsList {
+    columns: 1;
+  }
+}

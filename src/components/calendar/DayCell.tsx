@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Plus, X, GripVertical, StickyNote } from 'lucide-react';
+import { ExternalEventCard } from './ExternalEventCard';
 import type { CalendarDay } from '@/utils/calendar';
-import type { PlannedMeal, MealSlot } from '@/types';
+import type { PlannedMeal, MealSlot, ExternalEvent } from '@/types';
 import styles from './DayCell.module.css';
 
 const hasNotesOrExtras = (meal: PlannedMeal): boolean => {
@@ -13,6 +14,7 @@ interface DayCellProps {
   meals: PlannedMeal[];
   mealSlots: MealSlot[];
   recipesById: Map<string, { id: string; title: string }>;
+  externalEvents?: ExternalEvent[];
   onClick: () => void;
   onMealClick: (meal: PlannedMeal) => void;
   onAddMeal: (slotId: string) => void;
@@ -32,6 +34,7 @@ export function DayCell({
   meals,
   mealSlots,
   recipesById,
+  externalEvents = [],
   onClick,
   onMealClick,
   onAddMeal,
@@ -218,8 +221,21 @@ export function DayCell({
         })}
       </div>
 
-      {compact && meals.length > 0 && (
-        <div className={styles.mealCount}>{meals.length} meal{meals.length > 1 ? 's' : ''}</div>
+      {/* External events from Google Calendar */}
+      {externalEvents.length > 0 && (
+        <div className={styles.externalEvents}>
+          {externalEvents.map((event) => (
+            <ExternalEventCard key={event.id} event={event} compact={compact} />
+          ))}
+        </div>
+      )}
+
+      {compact && (meals.length > 0 || externalEvents.length > 0) && (
+        <div className={styles.mealCount}>
+          {meals.length > 0 && `${meals.length} meal${meals.length > 1 ? 's' : ''}`}
+          {meals.length > 0 && externalEvents.length > 0 && ', '}
+          {externalEvents.length > 0 && `${externalEvents.length} event${externalEvents.length > 1 ? 's' : ''}`}
+        </div>
       )}
     </div>
   );

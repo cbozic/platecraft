@@ -89,8 +89,13 @@ button {
     font-size: 12pt;
   }
 
-  .no-print {
+  .no-print,
+  .hide-when-printing {
     display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
   }
 
   /* Hide navigation and other UI elements when printing */

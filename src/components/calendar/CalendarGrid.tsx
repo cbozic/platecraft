@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { getMonthCalendarWeeks, getDayNames } from '@/utils/calendar';
 import { DayCell } from './DayCell';
-import type { PlannedMeal, MealSlot } from '@/types';
+import type { PlannedMeal, MealSlot, ExternalEvent } from '@/types';
 import styles from './CalendarGrid.module.css';
 
 interface CalendarGridProps {
@@ -10,6 +10,7 @@ interface CalendarGridProps {
   mealsByDate: Map<string, PlannedMeal[]>;
   mealSlots: MealSlot[];
   recipesById: Map<string, { id: string; title: string }>;
+  externalEventsByDate?: Map<string, ExternalEvent[]>;
   onDayClick: (date: Date) => void;
   onMealClick: (meal: PlannedMeal) => void;
   onAddMeal: (date: Date, slotId: string) => void;
@@ -23,6 +24,7 @@ export function CalendarGrid({
   mealsByDate,
   mealSlots,
   recipesById,
+  externalEventsByDate,
   onDayClick,
   onMealClick,
   onAddMeal,
@@ -58,6 +60,7 @@ export function CalendarGrid({
                 meals={mealsByDate.get(day.dateString) || []}
                 mealSlots={mealSlots}
                 recipesById={recipesById}
+                externalEvents={externalEventsByDate?.get(day.dateString) || []}
                 onClick={() => onDayClick(day.date)}
                 onMealClick={onMealClick}
                 onAddMeal={(slotId) => onAddMeal(day.date, slotId)}

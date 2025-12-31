@@ -6,6 +6,7 @@ export * from './mealPlan';
 export * from './calendar';
 export * from './settings';
 export * from './import';
+export * from './mealPlanAssistant';
 
 // Export/Import data format
 export interface PlatecraftExport {

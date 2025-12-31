@@ -6,3 +6,4 @@ export type { UrlScrapeResult } from './urlScraperService';
 export { ocrService } from './ocrService';
 export type { OcrResult, OcrProgress, OcrQualityAssessment } from './ocrService';
 export { imageService } from './imageService';
+export { icalService } from './icalService';

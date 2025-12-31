@@ -115,6 +115,16 @@
   text-align: center;
 }
 
+/* External events section */
+.externalEvents {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: 1px dashed var(--color-border);
+}
+
 /* Full mode (week view) */
 .mealSlot {
   display: flex;
