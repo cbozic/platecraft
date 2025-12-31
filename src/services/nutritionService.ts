@@ -179,13 +179,6 @@ export const nutritionService = {
 
       const data = await response.json();
 
-      // Debug: log the raw response structure
-      console.log('USDA API response for', fdcId, ':', {
-        dataType: data.dataType,
-        nutrientCount: data.foodNutrients?.length,
-        sampleNutrient: data.foodNutrients?.[0],
-      });
-
       // USDA API returns nutrients in different formats depending on the data type
       // - Foundation/SR Legacy: { nutrient: { id, name, ... }, amount }
       // - Branded: { nutrientId, nutrientName, value }
@@ -228,11 +221,6 @@ export const nutritionService = {
         }
       );
 
-      // Debug: check if we found our target nutrients
-      const targetIds = Object.values(NUTRIENT_IDS) as number[];
-      const foundNutrients = foodNutrients.filter(n => targetIds.includes(n.nutrientId));
-      console.log('Found target nutrients:', foundNutrients);
-
       return {
         fdcId: data.fdcId,
         description: data.description,
@@ -260,15 +248,8 @@ export const nutritionService = {
     foodDetail: FoodDetail,
     servingGrams?: number
   ): NutritionInfo {
-    console.log('convertToNutritionInfo called with:', {
-      nutrientCount: foodDetail.foodNutrients.length,
-      servingGrams,
-      sampleNutrients: foodDetail.foodNutrients.slice(0, 3),
-    });
-
     const getNutrientValue = (nutrientId: number): number => {
       const nutrient = foodDetail.foodNutrients.find((n) => n.nutrientId === nutrientId);
-      console.log(`Looking for nutrient ${nutrientId}:`, nutrient);
       return nutrient?.value || 0;
     };
 
