@@ -267,28 +267,70 @@
   opacity: 0.5;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .cell {
     padding: 2px;
+    min-height: 50px;
   }
 
   .dayNumber {
-    width: 1.5rem;
-    height: 1.5rem;
-    font-size: var(--font-size-xs);
-  }
-
-  .mealDot {
-    width: 5px;
-    height: 5px;
-  }
-
-  .mealName {
+    width: 1.25rem;
+    height: 1.25rem;
     font-size: 0.65rem;
   }
 
-  .mealCount {
+  /* Compact mode (month view): dots only */
+  .compact .meals {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3px;
+  }
+
+  .compact .mealLabel {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .compact .mealName {
     display: none;
+  }
+
+  .compact .mealDot {
+    width: 8px;
+    height: 8px;
+  }
+
+  .compact .mealCount,
+  .compact .notesIndicator {
+    display: none;
+  }
+
+  /* Full mode (week view) adjustments */
+  .cell:not(.compact) {
+    min-width: calc(33.333vw - 8px);
+    scroll-snap-align: start;
+  }
+
+  .cell:not(.compact) .slotName {
+    font-size: 0.6rem;
+  }
+
+  .cell:not(.compact) .mealCard {
+    padding: 2px var(--spacing-xs);
+  }
+
+  .cell:not(.compact) .mealTitle {
+    font-size: 0.65rem;
+    -webkit-line-clamp: 2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
+  }
+
+  .addButton {
+    height: 1.25rem;
   }
 }
 

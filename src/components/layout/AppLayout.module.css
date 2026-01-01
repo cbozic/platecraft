@@ -17,6 +17,13 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Hide header on mobile - bottom nav provides navigation */
+@media (max-width: 767px) {
+  .header {
+    display: none;
+  }
+}
+
 .logo {
   display: flex;
   align-items: center;

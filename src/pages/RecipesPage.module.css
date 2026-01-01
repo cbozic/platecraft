@@ -135,3 +135,64 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
+
+/* Mobile: Horizontal card layout */
+@media (max-width: 767px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchWrapper {
+    max-width: none;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+
+  .cardLink > :global(.card) {
+    display: flex;
+    flex-direction: row;
+  }
+
+  .cardImage {
+    aspect-ratio: 1 / 1;
+    width: 100px;
+    min-width: 100px;
+    flex-shrink: 0;
+  }
+
+  .placeholderImage {
+    font-size: 2rem;
+  }
+
+  .cardContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--spacing-sm);
+  }
+
+  .cardTitle {
+    font-size: var(--font-size-base);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .cardDescription {
+    -webkit-line-clamp: 1;
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .cardMeta {
+    gap: var(--spacing-sm);
+  }
+}

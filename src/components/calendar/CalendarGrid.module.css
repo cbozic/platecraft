@@ -40,13 +40,13 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .headerCell {
-    padding: var(--spacing-xs);
-    font-size: var(--font-size-xs);
+    padding: 2px;
+    font-size: 0.65rem;
   }
 
   .week {
-    min-height: 80px;
+    min-height: 60px;
   }
 }

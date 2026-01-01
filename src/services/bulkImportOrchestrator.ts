@@ -10,6 +10,8 @@ import type {
 import type { NutritionInfo } from '@/types/recipe';
 import { buildCategoryUrl, parseSearchResultsPage, sortByRating, extractNutritionFromRecipePage, buildDuckDuckGoSearchUrl, parseDuckDuckGoResults } from './recipeSiteScrapers';
 import { urlScraperService } from './urlScraperService';
+import { duplicateDetectionService } from './duplicateDetectionService';
+import { tagScanningService } from './tagScanningService';
 
 /**
  * Execute bulk import of recipes from multiple sites
@@ -126,12 +128,28 @@ async function importRecipes(
 ): Promise<BulkImportQueueItem[]> {
   const { onProgress, onItemComplete, concurrency = 2, delayMs = 500 } = options;
 
-  // Create queue items
-  const queueItems: BulkImportQueueItem[] = searchResults.map((searchResult) => ({
-    id: uuidv4(),
-    searchResult,
-    status: 'pending',
-  }));
+  // Run bulk duplicate detection on all search results
+  console.log('[Bulk Import] Running duplicate detection...');
+  const duplicateResults = await duplicateDetectionService.checkBulkDuplicates(
+    searchResults.map((r) => ({ title: r.title, sourceUrl: r.url }))
+  );
+
+  // Create queue items with duplicate info
+  const queueItems: BulkImportQueueItem[] = searchResults.map((searchResult) => {
+    const duplicateKey = searchResult.url || searchResult.title;
+    const duplicateInfo = duplicateResults.get(duplicateKey);
+
+    return {
+      id: uuidv4(),
+      searchResult,
+      status: 'pending' as const,
+      duplicateInfo,
+    };
+  });
+
+  // Log duplicate detection results
+  const duplicateCount = queueItems.filter((item) => item.duplicateInfo?.isDuplicate).length;
+  console.log(`[Bulk Import] Found ${duplicateCount} potential duplicates out of ${queueItems.length} recipes`);
 
   const total = queueItems.length;
   let completed = 0;
@@ -233,6 +251,15 @@ async function processRecipe(
       // Try to extract nutrition from schema.org or page HTML
       if (scrapeResult.recipe.nutrition) {
         item.nutrition = scrapeResult.recipe.nutrition;
+      }
+
+      // Run tag scanning to auto-detect applicable tags
+      try {
+        item.detectedTags = tagScanningService.detectTags(item.recipe);
+        console.log(`[Bulk Import] Detected tags for "${item.recipe.title}":`, item.detectedTags);
+      } catch (tagError) {
+        console.warn('[Bulk Import] Tag scanning failed:', tagError);
+        item.detectedTags = [];
       }
 
       return item;

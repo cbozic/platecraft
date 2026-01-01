@@ -118,9 +118,12 @@ Four methods for importing recipes into the system:
 **URL Import**:
 - Paste URL from recipe website
 - Attempt to extract schema.org/Recipe JSON-LD (preferred, no AI needed)
-- Fallback: Use CORS proxy (allorigins.win) to fetch page content
+- Fallback: Use CORS proxy (corsproxy.io, allorigins.win) to fetch page content
 - If proxy fails: Manual paste fallback available
 - AI parses raw text into structured recipe if schema.org not found
+- Text decoding: Automatically decodes URL-encoded characters (%27 → ', %20 → space) and HTML entities (&#39; → ', &amp; → &)
+- Automatic tag scanning: Detects and applies system tags based on recipe content (see section 2.10)
+- Preview displays detected tags before saving
 
 **Text Paste Import**:
 - Paste recipe text from any source (email, message, document)
@@ -148,16 +151,23 @@ Four methods for importing recipes into the system:
 - Multi-step workflow:
   - Step 1: Configuration selection
   - Step 2: Searching (with progress tracking)
-  - Step 3: Importing (with per-recipe progress)
+  - Step 3: Importing (with per-recipe progress, automatic duplicate detection and tag scanning)
   - Step 4: Preview grid with select/deselect capability
-  - Step 5: Batch save with duplicate detection
+  - Step 5: Batch save to IndexedDB
   - Step 6: Completion confirmation
 - Features:
-  - Cancellation support at any stage
-  - Duplicate detection (see section 2.9)
-  - Automatic tag scanning (see section 2.10)
+  - Cancellation support at any stage via AbortController
+  - Text decoding: Automatically decodes URL-encoded characters (%27 → ', %20 → space) and HTML entities (&#39; → ', &amp; → &, &#8217; → ')
+  - Duplicate detection: Runs bulk check before preview, auto-deselects duplicates (see section 2.9)
+  - Automatic tag scanning: Detects and applies all 23 system tags to each recipe (see section 2.10)
   - All imported recipes tagged with "bulk-import" for easy identification
-  - Responsive preview cards showing: title, site, protein category, rating, servings, prep/cook times, nutrition badge
+  - Responsive preview cards showing:
+    - Recipe title, thumbnail, rating, site badge, protein category badge
+    - Servings, prep/cook times, nutrition badge (if available)
+    - Duplicate warning banner (if recipe already exists)
+    - Auto-detected tags (up to 4 shown with "+N" for more)
+  - Filter preview by site or protein category
+  - Efficient bulk save using IndexedDB bulkAdd() with proper ID generation and timestamps
 
 All import methods show a preview/edit form before final save.
 
@@ -187,68 +197,92 @@ Manual mode always available as fallback if API is unavailable or rate limited.
 
 ### 2.9 Duplicate Detection
 
-**During Bulk Import**:
-- Prevents importing duplicate recipes into the database
+**Implementation**:
+- Service: `duplicateDetectionService.ts` provides efficient duplicate checking
 - Detection criteria:
-  - **Exact title match**: Case-insensitive comparison of recipe titles
-  - **Source URL match**: Checks if the recipe's source URL is already in the database
-- Detection timing:
-  - Occurs during the import preview stage
-  - Duplicates are visually marked or filtered
-  - User is alerted to duplicates and can choose to:
-    - Skip the duplicate
-    - Force import if needed
-- Applies to:
-  - All import methods (Photo, URL, Text, Bulk)
-  - Especially important for bulk import due to volume
+  - **Exact title match**: Case-insensitive comparison with `.toLowerCase().trim()`
+  - **Source URL match**: Normalized URL comparison (removes protocol, www prefix, trailing slashes, query params)
+- Detection methods:
+  - `checkByTitle()`: Single recipe title check
+  - `checkBySourceUrl()`: Single recipe URL check
+  - `checkDuplicate()`: Combined check (URL first, then title)
+  - `checkBulkDuplicates()`: Efficient bulk checking using pre-loaded lookup maps
+- Match types returned: 'none', 'title', 'url', 'both'
+
+**Integration**:
+- **Bulk Import**: Runs bulk duplicate check after fetching all recipes, before preview step
+- **URL Import**: Can be integrated for single recipe checking (optional)
+- Detection timing: Before preview stage, allowing user to review before saving
 
 **User Experience**:
-- If duplicate detected, preview shows warning badge
-- User can deselect duplicate recipe before saving
-- Detailed message indicates why recipe was flagged as duplicate (matching title or URL)
-- Link to existing recipe for comparison
+- **Visual indicators in preview**:
+  - Orange/warning-colored border on duplicate recipe cards
+  - Warning banner at top of card showing match type:
+    - "Already imported from this URL"
+    - "Recipe with same title exists"
+    - "Duplicate (same URL and title)"
+  - "Duplicate" badge in recipe metadata
+- **Auto-deselection**: Duplicates are automatically deselected in bulk import preview (user can manually re-select if desired)
+- User retains full control: Can choose to import duplicate if intentional
+- Detailed message indicates why recipe was flagged as duplicate
 
 ### 2.10 Automatic Tag Scanning
 
 **Purpose**:
-Auto-apply system tags to imported recipes based on content analysis using fuzzy matching algorithms.
+Auto-apply system tags to imported recipes based on content analysis using keyword-based fuzzy matching.
 
-**Scannable System Tags**:
-1. **Quick Prep** - Recipes with prep time < 15 minutes, OR text contains keywords: "quick", "easy", "fast", "minute", "speed", "rapid"
-2. **Slow Cooker** - Text contains: "slow cooker", "slowcooker", "crock pot", "crockpot"
-3. **Instant Pot** - Text contains: "instant pot", "instantpot", "pressure cook"
-4. **One Pot** - Text contains: "one pot", "onepot", "one-pot", "single pan", "all in one"
-5. **Meal Prep Friendly** - Text contains: "meal prep", "make ahead", "batch cook", "freezer", "reheats well"
-6. **Freezer Friendly** - Text contains: "freeze", "freezer", "frozen", "make ahead and freeze"
-7. **Kid Friendly** - Text contains: "kid", "family", "children", "toddler", "easy", "mild flavors"
-8. **Vegetarian** - Ingredient list contains no meat/poultry/seafood, OR text contains "vegetarian"
-9. **Vegan** - Ingredient list contains no animal products, OR text contains "vegan"
-10. **Gluten Free** - Text contains: "gluten free", "glutenfree", "no gluten"
-11. **Dairy Free** - Ingredient list contains no dairy, OR text contains: "dairy free", "dairyfree"
-12. **Low Carb** - Text contains: "low carb", "lowcarb", "keto", "paleo"
-13. **High Protein** - Nutrition info shows protein > 30g per serving, OR text contains: "high protein", "protein-packed"
-14. **Budget Friendly** - Text contains: "budget", "cheap", "inexpensive", "economical", "thrifty"
-15. **Breakfast** - Ingredients or title contain: "egg", "pancake", "waffle", "cereal", "oatmeal", "toast"
-16. **Lunch** - Title or text contains: "sandwich", "salad", "wrap"
-17. **Dinner** - Automatically applied to most recipes unless other meal type detected
-18. **Dessert** - Text contains: "dessert", "cake", "cookie", "brownie", "pie", "chocolate", "sweet"
-19. **Snack** - Ingredients or text contain: "snack", "appetizer", "dip", "trail mix"
-20. **Appetizer** - Text contains: "appetizer", "starter", "hors d'oeuvre"
+**Implementation**:
+- Service: `tagScanningService.ts` provides tag detection functionality
+- All 23 system tags are supported with detection rules
+- Methods:
+  - `detectTags(recipe)`: Main function that scans recipe and returns array of detected tag names
+  - `getSystemTagNames()`: Returns all available system tag names
+  - `isSystemTag(tagName)`: Checks if a tag is a system tag
+- Fuzzy matching algorithm:
+  - Case-insensitive substring matching
+  - Word boundary awareness (handles hyphens, underscores)
+  - Combines keyword matching with custom check functions for specific tags
 
-**Implementation Details**:
-- Fuzzy matching with configurable threshold (default 80% match)
-- Scans recipe title, description, ingredients list, and instructions
-- Case-insensitive matching
-- Applied automatically during import (before preview save)
-- Multiple tags can be applied to single recipe
-- User can remove auto-applied tags in preview before saving
-- Tags are applied in addition to any import-specific tags (e.g., "bulk-import")
+**Supported System Tags** (all 23):
+1. **Quick Prep** - Time-based: prep ≤15min OR total time ≤30min; Keywords: "quick", "easy", "fast", "minute", "speed", "rapid", "weeknight"
+2. **Slow Cooker** - Keywords: "slow cooker", "slowcooker", "slow-cooker", "crock pot", "crockpot"
+3. **Instant Pot** - Keywords: "instant pot", "instantpot", "instant-pot", "pressure cooker", "pressure cook"
+4. **One Pot** - Keywords: "one pot", "one-pot", "onepot", "single pot", "one pan", "sheet pan", "all in one"
+5. **Meal Prep Friendly** - Keywords: "meal prep", "make ahead", "make-ahead", "batch cook", "prep ahead", "reheats well", "stores well", "leftovers"
+6. **Freezer Friendly** - Keywords: "freeze", "freezer", "frozen", "freeze well", "freezes well", "make ahead and freeze"
+7. **Kid Friendly** - Keywords: "kid friendly", "kid-friendly", "family friendly", "children", "toddler", "picky eater", "mild"
+8. **Vegetarian** - Ingredient analysis: No meat/poultry/seafood in ingredient list; Keywords: "vegetarian", "veggie", "meatless"
+9. **Vegan** - Ingredient analysis: No animal products (meat, dairy, eggs, honey) in ingredient list; Keywords: "vegan", "plant-based", "plant based"
+10. **Gluten Free** - Keywords: "gluten free", "gluten-free", "glutenfree", "no gluten", "gf"
+11. **Dairy Free** - Ingredient analysis: No dairy products in ingredient list; Keywords: "dairy free", "dairy-free", "dairyfree", "no dairy", "non-dairy", "nondairy"
+12. **Low Carb** - Keywords: "low carb", "low-carb", "lowcarb", "keto", "ketogenic", "paleo", "atkins"
+13. **High Protein** - Nutrition-based: protein ≥30g per serving; Keywords: "high protein", "high-protein", "protein packed", "protein-packed"
+14. **Budget Friendly** - Keywords: "budget", "cheap", "inexpensive", "economical", "thrifty", "affordable", "frugal"
+15. **Holiday** - Keywords: "holiday", "christmas", "thanksgiving", "easter", "halloween", "hanukkah", "new year", "festive", "celebration"
+16. **Breakfast** - Title analysis: "pancake", "waffle", "oatmeal", "cereal", "toast", "eggs benedict", "french toast", "scrambled egg", "omelet", "frittata", "hash brown", "granola", "smoothie bowl"; Keywords: "breakfast", "brunch", "morning"
+17. **Lunch** - Title analysis: "sandwich", "wrap", "salad", "soup"; Keywords: "lunch", "lunchbox"
+18. **Dinner** - Keywords: "dinner", "supper", "main course", "entree", "entrée"
+19. **Dessert** - Title analysis: "cake", "cookie", "brownie", "pie", "chocolate", "ice cream", "pudding", "cupcake", "cheesecake", "tart", "pastry", "donut", "macaron", "fudge", "truffle"; Keywords: "dessert", "sweet", "treat"
+20. **Snack** - Title analysis: "dip", "trail mix", "popcorn", "chips", "nuts", "crackers", "energy ball", "energy bite"; Keywords: "snack", "nibble", "bite-size", "finger food"
+21. **Appetizer** - Keywords: "appetizer", "starter", "hors d'oeuvre", "hors doeuvre", "canape", "canapé", "tapas", "antipasto", "amuse-bouche"
+22. **Side Dish** - Keywords: "side dish", "side", "accompaniment", "garnish"
+23. **Beverage** - Keywords: "beverage", "drink", "cocktail", "mocktail", "smoothie", "juice", "lemonade", "tea", "coffee"
 
-**Sources for Tag Detection**:
-1. Parsed recipe fields (title, description, instructions, ingredient names)
-2. Nutrition information (for High Protein, etc.)
-3. Ingredient composition analysis (for Vegetarian, Vegan, Dairy Free)
-4. Cooking time analysis (for Quick Prep)
+**Integration**:
+- **Bulk Import**: Runs tag detection during recipe processing, tags displayed in preview cards
+- **URL Import**: Runs tag detection after recipe parsing, tags displayed in preview with Tag icon
+- **Display**: Shows up to 4 tags in preview with "+N" indicator for additional tags
+- **Saving**: Auto-detected tags are combined with existing tags (deduplicated) before saving
+
+**Technical Details**:
+- Scans: recipe title, description, instructions, notes, ingredient names
+- Case-insensitive matching with normalization (hyphens/underscores → spaces)
+- Direct substring matching for keywords
+- Custom check functions for ingredient analysis and time-based detection
+- Ingredient lists for detection: MEAT_INGREDIENTS (38 items), DAIRY_INGREDIENTS (18 items), ANIMAL_PRODUCTS (combined)
+- Multiple tags can be applied to a single recipe
+- Tags are verified against SYSTEM_TAGS before applying
+- User can remove auto-applied tags in recipe editor after saving
 
 ---
 

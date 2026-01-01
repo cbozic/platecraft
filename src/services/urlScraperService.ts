@@ -279,14 +279,55 @@ export const urlScraperService = {
   },
 
   /**
+   * Decode URL-encoded and HTML-encoded characters in text
+   */
+  decodeText(text: string): string {
+    let decoded = text;
+
+    // Decode URL-encoded characters (e.g., %27 -> ', %20 -> space)
+    try {
+      decoded = decodeURIComponent(decoded);
+    } catch {
+      // If decodeURIComponent fails (malformed %), try to decode common ones manually
+      decoded = decoded
+        .replace(/%27/g, "'")
+        .replace(/%22/g, '"')
+        .replace(/%20/g, ' ')
+        .replace(/%26/g, '&')
+        .replace(/%3C/g, '<')
+        .replace(/%3E/g, '>')
+        .replace(/%2F/g, '/');
+    }
+
+    // Decode HTML entities
+    decoded = decoded
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&#x27;/gi, "'")
+      .replace(/&#8217;/g, "'") // Right single quote
+      .replace(/&#8216;/g, "'") // Left single quote
+      .replace(/&#8220;/g, '"') // Left double quote
+      .replace(/&#8221;/g, '"') // Right double quote
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+      .replace(/&#x([a-f0-9]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)));
+
+    return decoded.trim();
+  },
+
+  /**
    * Extract string from various schema.org formats
    */
   extractString(value: unknown): string | null {
-    if (typeof value === 'string') return value;
+    if (typeof value === 'string') return this.decodeText(value);
     if (typeof value === 'object' && value !== null) {
       const obj = value as Record<string, unknown>;
-      if (typeof obj.name === 'string') return obj.name;
-      if (typeof obj['@value'] === 'string') return obj['@value'];
+      if (typeof obj.name === 'string') return this.decodeText(obj.name);
+      if (typeof obj['@value'] === 'string') return this.decodeText(obj['@value']);
     }
     return null;
   },

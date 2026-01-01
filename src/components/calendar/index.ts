@@ -6,3 +6,4 @@ export { ExternalEventCard } from './ExternalEventCard';
 export { PrintRecipesDatePicker } from './PrintRecipesDatePicker';
 export { PrintableRecipe } from './PrintableRecipe';
 export { PrintRecipesView } from './PrintRecipesView';
+export { MobileDayDetail } from './MobileDayDetail';

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Copy, Check, AlertCircle, ChevronRight, Loader2, Globe, ExternalLink } from 'lucide-react';
+import { Sparkles, Copy, Check, AlertCircle, ChevronRight, Loader2, Globe, ExternalLink, Tag } from 'lucide-react';
 import { Button } from '@/components/ui';
-import { recipeImportService, urlScraperService } from '@/services';
+import { recipeImportService, urlScraperService, tagScanningService } from '@/services';
 import { recipeRepository } from '@/db';
 import type { ParsedRecipe, AiParsingMode } from '@/types';
 import styles from './UrlImportTab.module.css';
@@ -34,6 +34,19 @@ export function UrlImportTab() {
     checkApiMode();
   }, []);
 
+  // Helper to detect and apply tags to a parsed recipe
+  const applyDetectedTags = (recipe: ParsedRecipe): ParsedRecipe => {
+    try {
+      const detectedTags = tagScanningService.detectTags(recipe);
+      // Combine any existing tags with detected tags (deduped)
+      const allTags = new Set([...(recipe.tags || []), ...detectedTags]);
+      return { ...recipe, tags: Array.from(allTags) };
+    } catch (err) {
+      console.warn('Tag scanning failed:', err);
+      return recipe;
+    }
+  };
+
   const handleFetchUrl = async () => {
     if (!url.trim()) return;
 
@@ -50,7 +63,8 @@ export function UrlImportTab() {
 
     // If schema.org recipe was found, show preview directly
     if (result.usedSchemaOrg && result.recipe) {
-      setParsedRecipe(result.recipe);
+      const recipeWithTags = applyDetectedTags(result.recipe);
+      setParsedRecipe(recipeWithTags);
       setUsedSchemaOrg(true);
       setStep('preview');
       return;
@@ -67,7 +81,9 @@ export function UrlImportTab() {
         const parseResult = await recipeImportService.parseWithApi(result.rawText);
 
         if (parseResult.success && parseResult.recipe) {
-          setParsedRecipe({ ...parseResult.recipe, sourceUrl: url.trim() });
+          const recipeWithUrl = { ...parseResult.recipe, sourceUrl: url.trim() };
+          const recipeWithTags = applyDetectedTags(recipeWithUrl);
+          setParsedRecipe(recipeWithTags);
           setStep('preview');
         } else {
           setError(parseResult.error || 'Failed to parse recipe');
@@ -101,7 +117,9 @@ export function UrlImportTab() {
     const result = recipeImportService.parseManualResponse(manualResponse);
 
     if (result.success && result.recipe) {
-      setParsedRecipe({ ...result.recipe, sourceUrl: url.trim() });
+      const recipeWithUrl = { ...result.recipe, sourceUrl: url.trim() };
+      const recipeWithTags = applyDetectedTags(recipeWithUrl);
+      setParsedRecipe(recipeWithTags);
       setStep('preview');
     } else {
       setError(result.error || 'Failed to parse response. Make sure you copied the complete JSON.');
@@ -341,6 +359,18 @@ export function UrlImportTab() {
               {parsedRecipe.prepTimeMinutes && <span>Prep: {parsedRecipe.prepTimeMinutes} min</span>}
               {parsedRecipe.cookTimeMinutes && <span>Cook: {parsedRecipe.cookTimeMinutes} min</span>}
             </div>
+
+            {parsedRecipe.tags && parsedRecipe.tags.length > 0 && (
+              <div className={styles.previewTags}>
+                <Tag size={14} />
+                <span className={styles.tagLabel}>Auto-detected tags:</span>
+                <div className={styles.tagList}>
+                  {parsedRecipe.tags.map((tag) => (
+                    <span key={tag} className={styles.tag}>{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className={styles.previewSectionContent}>
               <h5>Ingredients ({parsedRecipe.ingredients.length})</h5>

@@ -15,3 +15,6 @@ export type {
   NutritionSearchOptions,
   NutritionServiceError,
 } from './nutritionService';
+export { duplicateDetectionService } from './duplicateDetectionService';
+export type { DuplicateCheckResult, BulkDuplicateCheckResult } from './duplicateDetectionService';
+export { tagScanningService } from './tagScanningService';

@@ -1,5 +1,6 @@
 import type { NutritionInfo } from './recipe';
 import type { ParsedRecipe } from './import';
+import type { DuplicateCheckResult } from '@/services/duplicateDetectionService';
 
 // Supported recipe sites
 export type RecipeSite = 'allrecipes' | 'foodnetwork' | 'epicurious';
@@ -34,6 +35,10 @@ export interface BulkImportQueueItem {
   recipe?: ParsedRecipe;
   error?: string;
   nutrition?: NutritionInfo;
+  // Duplicate detection result
+  duplicateInfo?: DuplicateCheckResult;
+  // Auto-detected tags from content scanning
+  detectedTags?: string[];
 }
 
 // Progress tracking for the bulk import process

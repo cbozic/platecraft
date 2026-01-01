@@ -8,6 +8,7 @@ import {
   RecipePicker,
   PrintRecipesDatePicker,
   PrintRecipesView,
+  MobileDayDetail,
 } from '@/components/calendar';
 import { MealPlanAssistantModal } from '@/components/mealPlanAssistant';
 import type { DayMeals } from '@/components/calendar/PrintRecipesView';
@@ -16,6 +17,8 @@ import { icalService } from '@/services';
 import { mealPlanRepository, recipeRepository, settingsRepository, tagRepository } from '@/db';
 import type { PlannedMeal, MealExtraItem, Recipe, MealSlot, Tag } from '@/types';
 import styles from './CalendarPage.module.css';
+
+const MOBILE_BREAKPOINT = 767;
 
 export function CalendarPage() {
   const {
@@ -51,16 +54,34 @@ export function CalendarPage() {
   const [planAssistantOpen, setPlanAssistantOpen] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
 
+  // Mobile day detail state
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
+
+  // Detect mobile viewport
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Fetch tags for meal plan assistant
   useEffect(() => {
     tagRepository.getAll().then(setTags);
   }, []);
 
   const handleDayClick = useCallback((date: Date) => {
-    // Switch to week view centered on this date
-    goToDate(date);
-    setView('week');
-  }, [goToDate, setView]);
+    if (isMobile && view === 'month') {
+      // On mobile in month view, select the day to show details below
+      setSelectedDate(date);
+    } else {
+      // On desktop or in week view, switch to week view centered on this date
+      goToDate(date);
+      setView('week');
+    }
+  }, [goToDate, setView, isMobile, view]);
 
   const handleMealClick = useCallback((meal: PlannedMeal) => {
     // For now, just log - could open a meal detail modal
@@ -336,6 +357,20 @@ export function CalendarPage() {
             onAddMeal={handleAddMeal}
             onRemoveMeal={handleRemoveMeal}
             onMoveMeal={handleMoveMeal}
+          />
+        )}
+
+        {/* Mobile day detail panel - shown below month view on mobile */}
+        {isMobile && view === 'month' && (
+          <MobileDayDetail
+            date={selectedDate}
+            meals={mealsByDate.get(format(selectedDate, 'yyyy-MM-dd')) || []}
+            mealSlots={mealSlots}
+            recipesById={recipesById}
+            externalEvents={externalEventsByDate.get(format(selectedDate, 'yyyy-MM-dd'))}
+            onAddMeal={handleAddMeal}
+            onRemoveMeal={handleRemoveMeal}
+            onMealClick={handleMealClick}
           />
         )}
       </div>

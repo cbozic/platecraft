@@ -9,6 +9,8 @@ import {
   Star,
   Package,
   Filter,
+  Copy,
+  Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { recipeRepository } from '@/db';
@@ -103,9 +105,11 @@ export function BulkImportTab() {
         return;
       }
 
-      // Automatically select all successful recipes
+      // Automatically select all successful non-duplicate recipes
       const successfulIds = new Set(
-        items.filter((item) => item.status === 'success').map((item) => item.id)
+        items
+          .filter((item) => item.status === 'success' && !item.duplicateInfo?.isDuplicate)
+          .map((item) => item.id)
       );
       setSelectedRecipeIds(successfulIds);
       setQueueItems(items);
@@ -158,17 +162,23 @@ export function BulkImportTab() {
     setError(null);
 
     try {
-      // Convert to Recipe objects
-      const recipes: Omit<Recipe, 'id' | 'createdAt' | 'updatedAt'>[] = selectedItems.map((item) => {
+      // Convert to Recipe objects with all required fields
+      const now = new Date();
+      const recipes: Recipe[] = selectedItems.map((item) => {
         const formData = recipeImportService.convertToRecipeFormData(item.recipe!);
+        // Combine existing tags, bulk-import tag, and detected tags (deduped)
+        const allTags = new Set([...formData.tags, 'bulk-import', ...(item.detectedTags || [])]);
         return {
           ...formData,
+          id: uuidv4(), // Generate unique ID for each recipe
+          createdAt: now,
+          updatedAt: now,
           // Add IDs to ingredients
           ingredients: formData.ingredients.map((ing) => ({
             ...ing,
             id: uuidv4(),
           })),
-          tags: [...formData.tags, 'bulk-import'], // Add bulk-import tag for easy identification
+          tags: Array.from(allTags), // Include detected tags
           nutrition: item.nutrition || formData.nutrition || undefined,
           images: formData.images || [],
           isFavorite: false,
@@ -180,7 +190,7 @@ export function BulkImportTab() {
       });
 
       // Bulk create recipes
-      await recipeRepository.bulkCreate(recipes as Recipe[]);
+      await recipeRepository.bulkCreate(recipes);
 
       setStep('complete');
     } catch (err) {
@@ -460,53 +470,90 @@ export function BulkImportTab() {
             </div>
           ) : (
             <div className={styles.recipeGrid}>
-              {filteredItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={`${styles.recipeCard} ${selectedRecipeIds.has(item.id) ? styles.recipeCardSelected : ''}`}
-                  onClick={() => handleToggleRecipe(item.id)}
-                >
-                  <div className={styles.recipeCardHeader}>
-                    <input
-                      type="checkbox"
-                      checked={selectedRecipeIds.has(item.id)}
-                      onChange={() => handleToggleRecipe(item.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className={styles.recipeCheckbox}
-                    />
-                    {item.searchResult.rating && (
-                      <div className={styles.rating}>
-                        <Star size={14} fill="currentColor" />
-                        <span>{item.searchResult.rating.toFixed(1)}</span>
+              {filteredItems.map((item) => {
+                const isDuplicate = item.duplicateInfo?.isDuplicate;
+                const cardClasses = [
+                  styles.recipeCard,
+                  selectedRecipeIds.has(item.id) ? styles.recipeCardSelected : '',
+                  isDuplicate ? styles.recipeCardDuplicate : '',
+                ].filter(Boolean).join(' ');
+
+                return (
+                  <div
+                    key={item.id}
+                    className={cardClasses}
+                    onClick={() => handleToggleRecipe(item.id)}
+                  >
+                    {/* Duplicate warning banner */}
+                    {isDuplicate && (
+                      <div className={styles.duplicateWarning}>
+                        <Copy size={14} />
+                        <span>
+                          {item.duplicateInfo?.matchType === 'url'
+                            ? 'Already imported from this URL'
+                            : item.duplicateInfo?.matchType === 'both'
+                            ? 'Duplicate (same URL and title)'
+                            : 'Recipe with same title exists'}
+                        </span>
                       </div>
                     )}
-                  </div>
 
-                  {item.searchResult.thumbnailUrl && (
-                    <div className={styles.recipeThumbnail}>
-                      <img src={item.searchResult.thumbnailUrl} alt={item.recipe?.title || ''} />
+                    <div className={styles.recipeCardHeader}>
+                      <input
+                        type="checkbox"
+                        checked={selectedRecipeIds.has(item.id)}
+                        onChange={() => handleToggleRecipe(item.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className={styles.recipeCheckbox}
+                      />
+                      {item.searchResult.rating && (
+                        <div className={styles.rating}>
+                          <Star size={14} fill="currentColor" />
+                          <span>{item.searchResult.rating.toFixed(1)}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  <div className={styles.recipeCardBody}>
-                    <h4 className={styles.recipeTitle}>{item.recipe?.title || item.searchResult.title}</h4>
-
-                    <div className={styles.recipeBadges}>
-                      <span className={styles.badge}>{getSiteDisplayName(item.searchResult.site)}</span>
-                      <span className={styles.badge}>{getProteinDisplayName(item.searchResult.proteinCategory)}</span>
-                      {item.nutrition && <span className={styles.badgeNutrition}>Nutrition</span>}
-                    </div>
-
-                    {item.recipe && (
-                      <div className={styles.recipeMeta}>
-                        {item.recipe.servings && <span>{item.recipe.servings} servings</span>}
-                        {item.recipe.prepTimeMinutes && <span>{item.recipe.prepTimeMinutes}m prep</span>}
-                        {item.recipe.cookTimeMinutes && <span>{item.recipe.cookTimeMinutes}m cook</span>}
+                    {item.searchResult.thumbnailUrl && (
+                      <div className={styles.recipeThumbnail}>
+                        <img src={item.searchResult.thumbnailUrl} alt={item.recipe?.title || ''} />
                       </div>
                     )}
+
+                    <div className={styles.recipeCardBody}>
+                      <h4 className={styles.recipeTitle}>{item.recipe?.title || item.searchResult.title}</h4>
+
+                      <div className={styles.recipeBadges}>
+                        <span className={styles.badge}>{getSiteDisplayName(item.searchResult.site)}</span>
+                        <span className={styles.badge}>{getProteinDisplayName(item.searchResult.proteinCategory)}</span>
+                        {item.nutrition && <span className={styles.badgeNutrition}>Nutrition</span>}
+                        {isDuplicate && <span className={styles.badgeDuplicate}>Duplicate</span>}
+                      </div>
+
+                      {/* Detected tags */}
+                      {item.detectedTags && item.detectedTags.length > 0 && (
+                        <div className={styles.recipeTags}>
+                          <Tag size={12} />
+                          {item.detectedTags.slice(0, 4).map((tag) => (
+                            <span key={tag} className={styles.badgeTag}>{tag}</span>
+                          ))}
+                          {item.detectedTags.length > 4 && (
+                            <span className={styles.badgeTag}>+{item.detectedTags.length - 4}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {item.recipe && (
+                        <div className={styles.recipeMeta}>
+                          {item.recipe.servings && <span>{item.recipe.servings} servings</span>}
+                          {item.recipe.prepTimeMinutes && <span>{item.recipe.prepTimeMinutes}m prep</span>}
+                          {item.recipe.cookTimeMinutes && <span>{item.recipe.cookTimeMinutes}m cook</span>}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
