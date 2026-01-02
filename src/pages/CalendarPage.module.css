@@ -96,9 +96,8 @@
     width: 100%;
   }
 
-  /* Hide week view toggle on mobile - month view with day detail is better */
   .viewToggle {
-    display: none;
+    order: -1;
   }
 
   .toolbar {

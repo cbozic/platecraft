@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Printer, Download, BookOpen, Wand2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { Button } from '@/components/ui';
@@ -21,6 +22,7 @@ import styles from './CalendarPage.module.css';
 const MOBILE_BREAKPOINT = 767;
 
 export function CalendarPage() {
+  const navigate = useNavigate();
   const {
     currentDate,
     view,
@@ -84,9 +86,9 @@ export function CalendarPage() {
   }, [goToDate, setView, isMobile, view]);
 
   const handleMealClick = useCallback((meal: PlannedMeal) => {
-    // For now, just log - could open a meal detail modal
-    console.log('Meal clicked:', meal);
-  }, []);
+    // Navigate to the recipe detail page
+    navigate(`/recipes/${meal.recipeId}`);
+  }, [navigate]);
 
   const handleAddMeal = useCallback((date: Date, slotId: string) => {
     setPickerDate(date);
