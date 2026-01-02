@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Printer, Download, BookOpen, Wand2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { Button } from '@/components/ui';
@@ -21,8 +21,16 @@ import styles from './CalendarPage.module.css';
 
 const MOBILE_BREAKPOINT = 767;
 
+interface LocationState {
+  view?: 'month' | 'week';
+  date?: string;
+}
+
 export function CalendarPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const state = location.state as LocationState | null;
+
   const {
     currentDate,
     view,
@@ -74,6 +82,21 @@ export function CalendarPage() {
     tagRepository.getAll().then(setTags);
   }, []);
 
+  // Restore calendar state when navigating back from recipe
+  useEffect(() => {
+    if (state?.view) {
+      setView(state.view);
+    }
+    if (state?.date) {
+      const restoredDate = new Date(state.date);
+      goToDate(restoredDate);
+    }
+    // Clear the state after using it
+    if (state) {
+      window.history.replaceState({}, document.title);
+    }
+  }, [state, setView, goToDate]);
+
   const handleDayClick = useCallback((date: Date) => {
     if (isMobile && view === 'month') {
       // On mobile in month view, select the day to show details below
@@ -86,9 +109,15 @@ export function CalendarPage() {
   }, [goToDate, setView, isMobile, view]);
 
   const handleMealClick = useCallback((meal: PlannedMeal) => {
-    // Navigate to the recipe detail page
-    navigate(`/recipes/${meal.recipeId}`);
-  }, [navigate]);
+    // Navigate to the recipe detail page with calendar context
+    navigate(`/recipes/${meal.recipeId}`, {
+      state: {
+        from: 'calendar',
+        view,
+        date: currentDate.toISOString(),
+      },
+    });
+  }, [navigate, view, currentDate]);
 
   const handleAddMeal = useCallback((date: Date, slotId: string) => {
     setPickerDate(date);

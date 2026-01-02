@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, Heart, Clock, Users, Book, Link as LinkIcon, Apple } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import { ImageGallery, ServingsScaler } from '@/components/recipe';
@@ -8,9 +8,19 @@ import { scaleQuantity, formatQuantity, getScaleLabel } from '@/utils/recipeScal
 import type { Recipe, Tag } from '@/types';
 import styles from './RecipeDetailPage.module.css';
 
+interface LocationState {
+  from?: 'calendar' | 'recipes';
+  view?: 'month' | 'week';
+  date?: string;
+  searchQuery?: string;
+  searchParams?: string;
+}
+
 export function RecipeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const state = location.state as LocationState | null;
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,12 +93,37 @@ export function RecipeDetailPage() {
 
   const totalTime = (recipe.prepTimeMinutes || 0) + (recipe.cookTimeMinutes || 0);
 
+  // Determine back link based on where user came from
+  const backLink = state?.from === 'calendar' ? '/calendar' : '/';
+  const backText = state?.from === 'calendar' ? 'Back to Calendar' : 'Back to Recipes';
+
+  const handleBackClick = (e: React.MouseEvent) => {
+    if (state?.from === 'calendar' && state.date) {
+      e.preventDefault();
+      navigate('/calendar', {
+        state: {
+          view: state.view,
+          date: state.date,
+        },
+      });
+    } else if (state?.from === 'recipes') {
+      e.preventDefault();
+      const searchParams = state.searchParams || '';
+      navigate(`/${searchParams ? `?${searchParams}` : ''}`, {
+        state: {
+          searchQuery: state.searchQuery,
+          searchParams: state.searchParams,
+        },
+      });
+    }
+  };
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <Link to="/" className={styles.backLink}>
+        <Link to={backLink} className={styles.backLink} onClick={handleBackClick}>
           <ArrowLeft size={20} />
-          <span>Back to Recipes</span>
+          <span>{backText}</span>
         </Link>
         <div className={styles.actions}>
           <Button

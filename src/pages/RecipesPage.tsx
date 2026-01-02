@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { Plus, Search, Filter, Upload } from 'lucide-react';
 import { Button, Input, Card } from '@/components/ui';
 import { RecipeFilterPanel, getActiveFilterCount, DEFAULT_FILTERS } from '@/components/recipe';
@@ -53,7 +53,13 @@ function filtersToParams(filters: RecipeFilters): URLSearchParams {
   return params;
 }
 
+interface LocationState {
+  searchQuery?: string;
+  searchParams?: string;
+}
+
 export function RecipesPage() {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,6 +89,21 @@ export function RecipesPage() {
 
     loadData();
   }, []);
+
+  // Restore search state when navigating back from recipe
+  useEffect(() => {
+    const state = location.state as LocationState | null;
+    if (state?.searchQuery !== undefined) {
+      setSearchQuery(state.searchQuery);
+    }
+    if (state?.searchParams) {
+      setSearchParams(new URLSearchParams(state.searchParams), { replace: true });
+    }
+    // Clear the state after using it
+    if (state) {
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, setSearchParams]);
 
   // Apply search and filters
   const filteredRecipes = useMemo(() => {
@@ -217,7 +238,16 @@ export function RecipesPage() {
       ) : (
         <div className={styles.grid}>
           {filteredRecipes.map((recipe) => (
-            <Link key={recipe.id} to={`/recipes/${recipe.id}`} className={styles.cardLink}>
+            <Link
+              key={recipe.id}
+              to={`/recipes/${recipe.id}`}
+              className={styles.cardLink}
+              state={{
+                from: 'recipes',
+                searchQuery,
+                searchParams: searchParams.toString(),
+              }}
+            >
               <Card hoverable padding="none">
                 <div className={styles.cardImage}>
                   {recipe.images.find((img) => img.isPrimary)?.data ? (
