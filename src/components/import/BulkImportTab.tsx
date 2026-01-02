@@ -534,7 +534,7 @@ export function BulkImportTab() {
                       {item.detectedTags && item.detectedTags.length > 0 && (
                         <div className={styles.recipeTags}>
                           <Tag size={12} />
-                          {item.detectedTags.slice(0, 4).map((tag) => (
+                          {[...item.detectedTags].sort((a, b) => a.localeCompare(b)).slice(0, 4).map((tag) => (
                             <span key={tag} className={styles.badgeTag}>{tag}</span>
                           ))}
                           {item.detectedTags.length > 4 && (

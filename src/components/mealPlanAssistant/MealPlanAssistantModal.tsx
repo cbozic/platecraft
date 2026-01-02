@@ -124,7 +124,7 @@ export function MealPlanAssistantModal({
           {assistant.currentStep === 'dayRules' && (
             <DayTagRulesStep
               rules={assistant.config.dayTagRules}
-              availableTags={tags.filter((t) => !t.isHidden)}
+              availableTags={tags.filter((t) => !t.isHidden).sort((a, b) => a.name.localeCompare(b.name))}
               onUpdateRule={assistant.updateDayRule}
               onClear={assistant.clearDayRules}
             />

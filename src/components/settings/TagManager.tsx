@@ -116,8 +116,8 @@ export function TagManager() {
   };
 
   const systemTags = tags.filter((t) => t.isSystem);
-  const customTags = tags.filter((t) => !t.isSystem);
-  const visibleSystemTags = showHidden ? systemTags : systemTags.filter((t) => !t.isHidden);
+  const customTags = tags.filter((t) => !t.isSystem).sort((a, b) => a.name.localeCompare(b.name));
+  const visibleSystemTags = (showHidden ? systemTags : systemTags.filter((t) => !t.isHidden)).sort((a, b) => a.name.localeCompare(b.name));
   const hiddenCount = systemTags.filter((t) => t.isHidden).length;
 
   if (isLoading) {

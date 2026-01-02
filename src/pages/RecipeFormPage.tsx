@@ -57,7 +57,7 @@ export function RecipeFormPage() {
     const loadData = async () => {
       try {
         const tags = await tagRepository.getVisibleTags();
-        setAvailableTags(tags);
+        setAvailableTags(tags.sort((a, b) => a.name.localeCompare(b.name)));
 
         if (id) {
           // Editing existing recipe

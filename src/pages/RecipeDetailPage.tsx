@@ -183,7 +183,7 @@ export function RecipeDetailPage() {
 
           {tags.length > 0 && (
             <div className={styles.tags}>
-              {tags.map((tag) => (
+              {[...tags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => (
                 <span key={tag.id} className={styles.tag}>
                   {tag.name}
                 </span>

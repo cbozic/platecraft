@@ -365,7 +365,7 @@ export function UrlImportTab() {
                 <Tag size={14} />
                 <span className={styles.tagLabel}>Auto-detected tags:</span>
                 <div className={styles.tagList}>
-                  {parsedRecipe.tags.map((tag) => (
+                  {[...parsedRecipe.tags].sort((a, b) => a.localeCompare(b)).map((tag) => (
                     <span key={tag} className={styles.tag}>{tag}</span>
                   ))}
                 </div>
