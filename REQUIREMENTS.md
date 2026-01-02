@@ -100,11 +100,19 @@ System-provided tags (users cannot delete, but can hide):
 - Scaled quantities display with original in parentheses
 
 ### 2.6 OCR Recipe Import
-- Upload photo of recipe (cookbook page, recipe card, etc.)
+- Upload one or more photos of a recipe (cookbook page, recipe card, etc.)
 - OCR extracts text using Tesseract.js or cloud API
 - Parsed text presented in editable form
 - User confirms/corrects before saving
 - Original image optionally attached to recipe
+
+#### 2.6.1 How Multiple Image Import Works
+  1. Users can select multiple images at once using the file picker or by dragging multiple images
+  2. All selected images are displayed in a grid preview with individual remove buttons
+  3. When extracting text, OCR is run on each image sequentially with progress showing "Image X of Y"
+  4. The extracted text from all images is combined with clear separators
+  5. All images are saved as source photos with the recipe (first image marked as primary)
+  6. For manual vision mode, users can download all images at once to upload to Claude
 
 ### 2.7 Recipe Import Methods
 Four methods for importing recipes into the system:

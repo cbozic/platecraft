@@ -22,16 +22,16 @@ interface PersistedState {
   ocrConfidence: number | null;
   ocrQuality: OcrQualityAssessment | null;
   error: string | null;
-  // Compressed thumbnail for display when resuming (not the full image)
-  imageThumbnail: string | null;
+  // Compressed thumbnails for display when resuming (not the full images)
+  imageThumbnails: string[];
 }
 
 export function PhotoImportTab() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<ImportStep>('upload');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [extractedText, setExtractedText] = useState('');
   const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null);
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
@@ -46,11 +46,11 @@ export function PhotoImportTab() {
   const [manualVisionResponse, setManualVisionResponse] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [sourceImage, setSourceImage] = useState<RecipeImage | null>(null);
+  const [sourceImages, setSourceImages] = useState<RecipeImage[]>([]);
   const [ocrQuality, setOcrQuality] = useState<OcrQualityAssessment | null>(null);
-  const [imageBlob, setImageBlob] = useState<Blob | null>(null);
+  const [imageBlobs, setImageBlobs] = useState<Blob[]>([]);
   const [wasRestored, setWasRestored] = useState(false);
-  const [imageThumbnail, setImageThumbnail] = useState<string | null>(null);
+  const [imageThumbnails, setImageThumbnails] = useState<string[]>([]);
 
   // Combine state for persistence
   const persistedState = useMemo((): PersistedState => ({
@@ -62,8 +62,8 @@ export function PhotoImportTab() {
     ocrConfidence,
     ocrQuality,
     error,
-    imageThumbnail,
-  }), [step, extractedText, manualPrompt, manualResponse, manualVisionResponse, ocrConfidence, ocrQuality, error, imageThumbnail]);
+    imageThumbnails,
+  }), [step, extractedText, manualPrompt, manualResponse, manualVisionResponse, ocrConfidence, ocrQuality, error, imageThumbnails]);
 
   // Restore callback
   const handleRestoreState = useCallback((state: Partial<PersistedState>) => {
@@ -75,9 +75,9 @@ export function PhotoImportTab() {
     if (state.ocrConfidence !== undefined) setOcrConfidence(state.ocrConfidence);
     if (state.ocrQuality !== undefined) setOcrQuality(state.ocrQuality);
     if (state.error !== undefined) setError(state.error);
-    if (state.imageThumbnail) {
-      setImageThumbnail(state.imageThumbnail);
-      setPreviewUrl(state.imageThumbnail); // Use thumbnail as preview when restoring
+    if (state.imageThumbnails && state.imageThumbnails.length > 0) {
+      setImageThumbnails(state.imageThumbnails);
+      setPreviewUrls(state.imageThumbnails); // Use thumbnails as previews when restoring
     }
 
     // Mark as restored if we're past the upload step
@@ -110,38 +110,40 @@ export function PhotoImportTab() {
     checkApiMode();
   }, []);
 
-  // Clean up preview URL on unmount
+  // Clean up preview URLs on unmount
   useEffect(() => {
     return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      previewUrls.forEach(url => URL.revokeObjectURL(url));
     };
-  }, [previewUrl]);
+  }, [previewUrls]);
 
-  const handleFileSelect = useCallback((file: File) => {
-    // Validate file type
-    if (!ocrService.isValidImageType(file)) {
-      setError('Please select a valid image file (JPEG, PNG, GIF, WebP, or BMP)');
-      setStep('error');
-      return;
+  const handleFilesSelect = useCallback((files: File[]) => {
+    const validFiles: File[] = [];
+    const newPreviewUrls: string[] = [];
+
+    for (const file of files) {
+      // Validate file type
+      if (!ocrService.isValidImageType(file)) {
+        setError(`"${file.name}" is not a valid image file (JPEG, PNG, GIF, WebP, or BMP)`);
+        setStep('error');
+        return;
+      }
+
+      // Validate file size
+      if (!ocrService.isValidFileSize(file)) {
+        setError(`"${file.name}" is too large. Please select images under 10MB.`);
+        setStep('error');
+        return;
+      }
+
+      validFiles.push(file);
+      newPreviewUrls.push(URL.createObjectURL(file));
     }
 
-    // Validate file size
-    if (!ocrService.isValidFileSize(file)) {
-      setError('Image is too large. Please select an image under 10MB.');
-      setStep('error');
-      return;
-    }
-
-    // Create preview URL
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    setSelectedFile(file);
-  }, [previewUrl]);
+    // Add to existing files
+    setSelectedFiles(prev => [...prev, ...validFiles]);
+    setPreviewUrls(prev => [...prev, ...newPreviewUrls]);
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -159,77 +161,122 @@ export function PhotoImportTab() {
 
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleFileSelect(files[0]);
+      handleFilesSelect(Array.from(files));
     }
-  }, [handleFileSelect]);
+  }, [handleFilesSelect]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      handleFileSelect(files[0]);
+      handleFilesSelect(Array.from(files));
     }
-  };
-
-  const handleRemoveFile = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    setPreviewUrl(null);
-    setSelectedFile(null);
+    // Reset input so the same files can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
+  const handleRemoveFile = useCallback((index: number) => {
+    // Revoke the URL for the removed file
+    URL.revokeObjectURL(previewUrls[index]);
+
+    // Remove from both arrays
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+  }, [previewUrls]);
+
+  const handleClearAllFiles = useCallback(() => {
+    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    setSelectedFiles([]);
+    setPreviewUrls([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [previewUrls]);
+
   const handleExtractText = async () => {
-    if (!selectedFile) return;
+    if (selectedFiles.length === 0) return;
 
     setStep('ocr');
-    setOcrProgress({ status: 'Starting...', progress: 0 });
     setError(null);
 
-    const result = await ocrService.extractText(selectedFile, (progress) => {
-      setOcrProgress(progress);
-    });
+    const allTexts: string[] = [];
+    const allConfidences: number[] = [];
+    const blobs: Blob[] = [];
+    const thumbnails: string[] = [];
+    const images: RecipeImage[] = [];
 
-    if (!result.success || !result.text) {
-      setError(result.error || 'Failed to extract text from image');
-      setStep('error');
-      return;
-    }
+    // Process each file
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      const imageNum = i + 1;
+      const totalImages = selectedFiles.length;
 
-    setExtractedText(result.text);
-    setOcrConfidence(result.confidence ?? null);
+      setOcrProgress({
+        status: `Reading image ${imageNum} of ${totalImages}...`,
+        progress: i / totalImages
+      });
 
-    // Store the image blob for potential vision mode
-    setImageBlob(selectedFile);
+      const result = await ocrService.extractText(file, (progress) => {
+        // Scale progress for this image within the overall progress
+        const overallProgress = (i + progress.progress) / totalImages;
+        setOcrProgress({
+          status: totalImages > 1
+            ? `Image ${imageNum}/${totalImages}: ${progress.status}`
+            : progress.status,
+          progress: overallProgress
+        });
+      });
 
-    // Create a compressed thumbnail for state persistence (survives iOS Safari refresh)
-    try {
-      const thumbnail = await compressImageForStorage(selectedFile);
-      if (thumbnail) {
-        setImageThumbnail(thumbnail);
+      if (!result.success || !result.text) {
+        setError(`Failed to extract text from image ${imageNum}: ${result.error || 'Unknown error'}`);
+        setStep('error');
+        return;
       }
-    } catch (err) {
-      console.warn('Failed to create thumbnail for persistence:', err);
-      // Continue without thumbnail - not critical
+
+      allTexts.push(result.text);
+      allConfidences.push(result.confidence ?? 0);
+      blobs.push(file);
+
+      // Create thumbnail for state persistence
+      try {
+        const thumbnail = await compressImageForStorage(file);
+        if (thumbnail) {
+          thumbnails.push(thumbnail);
+        }
+      } catch (err) {
+        console.warn(`Failed to create thumbnail for image ${imageNum}:`, err);
+      }
+
+      // Create RecipeImage for this file
+      try {
+        const recipeImage = await imageService.createRecipeImage(
+          file,
+          totalImages > 1 ? `Source photo ${imageNum}` : 'Source photo',
+          i === 0 // First image is primary
+        );
+        images.push(recipeImage);
+      } catch (err) {
+        console.error(`Failed to create source image ${imageNum}:`, err);
+      }
     }
 
-    // Create a RecipeImage from the uploaded file for attachment
-    try {
-      const recipeImage = await imageService.createRecipeImage(
-        selectedFile,
-        'Source photo',
-        true // isPrimary
-      );
-      setSourceImage(recipeImage);
-    } catch (err) {
-      console.error('Failed to create source image:', err);
-      // Continue without the image - not critical
-    }
+    // Combine all extracted text
+    const combinedText = selectedFiles.length > 1
+      ? allTexts.map((text, i) => `--- Image ${i + 1} ---\n${text}`).join('\n\n')
+      : allTexts[0];
 
-    // Assess OCR quality
-    const quality = ocrService.assessQuality(result.text, result.confidence ?? 0);
+    // Use lowest confidence as overall confidence
+    const overallConfidence = Math.min(...allConfidences);
+
+    setExtractedText(combinedText);
+    setOcrConfidence(overallConfidence);
+    setImageBlobs(blobs);
+    setImageThumbnails(thumbnails);
+    setSourceImages(images);
+
+    // Assess OCR quality using overall confidence and combined text
+    const quality = ocrService.assessQuality(combinedText, overallConfidence);
     setOcrQuality(quality);
 
     // If quality is poor, show review step
@@ -239,7 +286,7 @@ export function PhotoImportTab() {
     }
 
     // Proceed to AI parsing
-    await proceedToParsing(result.text);
+    await proceedToParsing(combinedText);
   };
 
   const proceedToParsing = async (text: string) => {
@@ -266,14 +313,16 @@ export function PhotoImportTab() {
   };
 
   const handleTryVisionMode = async () => {
-    if (!imageBlob) {
-      setError('Image not available. Please try again.');
+    if (imageBlobs.length === 0) {
+      setError('Images not available. Please try again.');
       setStep('error');
       return;
     }
 
     setStep('vision-processing');
-    const result = await recipeImportService.parseWithVision(imageBlob);
+    // Use the first image for vision mode (API typically handles one image at a time)
+    // For multiple images, users should use OCR mode which combines text from all images
+    const result = await recipeImportService.parseWithVision(imageBlobs[0]);
 
     if (result.success && result.recipe) {
       setParsedRecipe(result.recipe);
@@ -288,15 +337,22 @@ export function PhotoImportTab() {
     setStep('manual-vision-prompt');
   };
 
-  const handleDownloadImage = () => {
-    if (!previewUrl || !selectedFile) return;
+  const handleDownloadImage = (index: number) => {
+    if (!previewUrls[index] || !selectedFiles[index]) return;
 
     const link = document.createElement('a');
-    link.href = previewUrl;
-    link.download = selectedFile.name || 'recipe-image.jpg';
+    link.href = previewUrls[index];
+    link.download = selectedFiles[index].name || `recipe-image-${index + 1}.jpg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleDownloadAllImages = () => {
+    // Download each image with a small delay to avoid browser blocking
+    selectedFiles.forEach((_, index) => {
+      setTimeout(() => handleDownloadImage(index), index * 200);
+    });
   };
 
   const handleCopyVisionPrompt = async () => {
@@ -424,7 +480,7 @@ export function PhotoImportTab() {
 
     setIsSaving(true);
     try {
-      const formData = recipeImportService.convertToRecipeFormData(parsedRecipe, sourceImage || undefined);
+      const formData = recipeImportService.convertToRecipeFormData(parsedRecipe, sourceImages.length > 0 ? sourceImages : undefined);
       const newRecipe = await recipeRepository.create(formData);
       clearPersistedState(); // Clear persisted state on successful save
       navigate(`/recipes/${newRecipe.id}`);
@@ -457,14 +513,14 @@ export function PhotoImportTab() {
     setExtractedText('');
     setOcrProgress(null);
     setOcrConfidence(null);
-    setSourceImage(null);
+    setSourceImages([]);
     setOcrQuality(null);
-    setImageBlob(null);
+    setImageBlobs([]);
     setVisionPromptCopied(false);
     setWasRestored(false);
-    setImageThumbnail(null);
+    setImageThumbnails([]);
     clearPersistedState(); // Clear persisted state when starting over
-    handleRemoveFile();
+    handleClearAllFiles();
   };
 
   const handleRetryWithManual = () => {
@@ -483,51 +539,59 @@ export function PhotoImportTab() {
     return (
       <div className={styles.container}>
         <div className={styles.uploadSection}>
-          <label className={styles.label}>Upload a photo of your recipe</label>
+          <label className={styles.label}>Upload photos of your recipe</label>
 
-          {!selectedFile ? (
-            <div
-              className={`${styles.dropzone} ${isDragOver ? styles.dropzoneActive : ''}`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload size={48} strokeWidth={1.5} className={styles.dropzoneIcon} />
-              <p className={styles.dropzoneText}>
-                Drag and drop an image here, or click to browse
-              </p>
-              <p className={styles.dropzoneHint}>
-                Supports JPEG, PNG, GIF, WebP, BMP (max 10MB)
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp,image/bmp"
-                onChange={handleInputChange}
-                className={styles.fileInput}
-              />
-            </div>
-          ) : (
-            <div className={styles.preview}>
-              <div className={styles.previewImageWrapper}>
-                <img src={previewUrl!} alt="Recipe preview" className={styles.previewImage} />
-                <button
-                  type="button"
-                  className={styles.removeButton}
-                  onClick={handleRemoveFile}
-                  aria-label="Remove image"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <div className={styles.previewInfo}>
-                <Image size={16} />
-                <span className={styles.fileName}>{selectedFile.name}</span>
-                <span className={styles.fileSize}>
-                  ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                </span>
-              </div>
+          <div
+            className={`${styles.dropzone} ${isDragOver ? styles.dropzoneActive : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={48} strokeWidth={1.5} className={styles.dropzoneIcon} />
+            <p className={styles.dropzoneText}>
+              Drag and drop images here, or click to browse
+            </p>
+            <p className={styles.dropzoneHint}>
+              Supports JPEG, PNG, GIF, WebP, BMP (max 10MB each). Select multiple images if your recipe spans multiple pages.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp,image/bmp"
+              multiple
+              onChange={handleInputChange}
+              className={styles.fileInput}
+            />
+          </div>
+
+          {selectedFiles.length > 0 && (
+            <div className={styles.previewGrid}>
+              {selectedFiles.map((file, index) => (
+                <div key={index} className={styles.preview}>
+                  <div className={styles.previewImageWrapper}>
+                    <img src={previewUrls[index]} alt={`Recipe preview ${index + 1}`} className={styles.previewImage} />
+                    <button
+                      type="button"
+                      className={styles.removeButton}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveFile(index);
+                      }}
+                      aria-label={`Remove image ${index + 1}`}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className={styles.previewInfo}>
+                    <Image size={16} />
+                    <span className={styles.fileName}>{file.name}</span>
+                    <span className={styles.fileSize}>
+                      ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -562,10 +626,10 @@ export function PhotoImportTab() {
         <div className={styles.actions}>
           <Button
             onClick={handleExtractText}
-            disabled={!selectedFile}
+            disabled={selectedFiles.length === 0}
             rightIcon={<ChevronRight size={18} />}
           >
-            Extract Text
+            Extract Text{selectedFiles.length > 1 ? ` from ${selectedFiles.length} Images` : ''}
           </Button>
         </div>
       </div>
@@ -578,7 +642,7 @@ export function PhotoImportTab() {
       <div className={styles.container}>
         <div className={styles.processing}>
           <Loader2 size={48} className={styles.spinner} />
-          <h3>Reading image...</h3>
+          <h3>Reading {selectedFiles.length > 1 ? 'images' : 'image'}...</h3>
           {ocrProgress && (
             <>
               <p>{ocrProgress.status}</p>
@@ -807,27 +871,46 @@ export function PhotoImportTab() {
               <span>Your progress was restored. Pick up where you left off!</span>
             </div>
           )}
-          <h3>Step 1: Download the image</h3>
+          <h3>Step 1: Download the {previewUrls.length > 1 ? 'images' : 'image'}</h3>
           <p className={styles.instruction}>
-            Download your recipe image, then upload it to Claude along with the prompt below.
+            Download your recipe {previewUrls.length > 1 ? 'images' : 'image'}, then upload {previewUrls.length > 1 ? 'them' : 'it'} to Claude along with the prompt below.
           </p>
 
-          {previewUrl && (
+          {previewUrls.length > 0 && (
             <div className={styles.imagePreviewSmall}>
-              <img src={previewUrl} alt="Recipe" />
-              <Button
-                variant="outline"
-                leftIcon={<Download size={18} />}
-                onClick={handleDownloadImage}
-              >
-                Download Image
-              </Button>
+              {previewUrls.length === 1 ? (
+                <>
+                  <img src={previewUrls[0]} alt="Recipe" />
+                  <Button
+                    variant="outline"
+                    leftIcon={<Download size={18} />}
+                    onClick={() => handleDownloadImage(0)}
+                  >
+                    Download Image
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className={styles.multiImagePreview}>
+                    {previewUrls.map((url, index) => (
+                      <img key={index} src={url} alt={`Recipe ${index + 1}`} />
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    leftIcon={<Download size={18} />}
+                    onClick={handleDownloadAllImages}
+                  >
+                    Download All {previewUrls.length} Images
+                  </Button>
+                </>
+              )}
             </div>
           )}
 
           <h3 className={styles.stepTitle}>Step 2: Copy this prompt to Claude</h3>
           <p className={styles.instruction}>
-            Upload the image to Claude (claude.ai) and paste this prompt:
+            Upload the {previewUrls.length > 1 ? 'images' : 'image'} to Claude (claude.ai) and paste this prompt:
           </p>
 
           <div className={styles.promptBox}>

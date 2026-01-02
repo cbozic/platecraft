@@ -293,7 +293,7 @@ export const recipeImportService = {
   /**
    * Convert a ParsedRecipe to the format needed for recipe creation
    */
-  convertToRecipeFormData(parsed: ParsedRecipe, sourceImage?: RecipeImage): {
+  convertToRecipeFormData(parsed: ParsedRecipe, sourceImages?: RecipeImage[]): {
     title: string;
     description: string;
     ingredients: Array<{
@@ -337,7 +337,7 @@ export const recipeImportService = {
       referencePageNumber: null,
       referenceOther: '',
       nutrition: null,
-      images: sourceImage ? [sourceImage] : undefined,
+      images: sourceImages && sourceImages.length > 0 ? sourceImages : undefined,
     };
   },
 };

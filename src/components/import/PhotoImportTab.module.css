@@ -65,6 +65,29 @@
   display: none;
 }
 
+/* Preview Grid for multiple images */
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.previewGrid .preview {
+  background-color: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+}
+
+.previewGrid .previewImageWrapper {
+  max-height: 150px;
+}
+
+.previewGrid .previewImage {
+  max-height: 150px;
+}
+
 /* Preview */
 .preview {
   display: flex;
@@ -575,6 +598,18 @@
   max-height: 200px;
   object-fit: contain;
   border-radius: var(--radius-sm);
+}
+
+.multiImagePreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  justify-content: center;
+}
+
+.multiImagePreview img {
+  max-width: calc(50% - var(--spacing-xs));
+  max-height: 150px;
 }
 
 .stepTitle {
