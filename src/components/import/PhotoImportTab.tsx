@@ -1,15 +1,30 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Copy, Check, AlertCircle, ChevronRight, Loader2, Upload, Image, X, Eye, AlertTriangle, Download } from 'lucide-react';
+import { Sparkles, Copy, Check, AlertCircle, ChevronRight, Loader2, Upload, Image, X, Eye, AlertTriangle, Download, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { recipeImportService, ocrService, imageService } from '@/services';
 import type { OcrProgress, OcrQualityAssessment } from '@/services';
 import { recipeRepository } from '@/db';
+import { useImportStatePersistence, compressImageForStorage } from '@/hooks';
 import type { ParsedRecipe, AiParsingMode, RecipeImage } from '@/types';
 import { RECIPE_VISION_PROMPT } from '@/types/import';
 import styles from './PhotoImportTab.module.css';
 
 type ImportStep = 'upload' | 'ocr' | 'ocr-review' | 'vision-processing' | 'processing' | 'manual-prompt' | 'manual-response' | 'manual-vision-prompt' | 'manual-vision-response' | 'preview' | 'error';
+
+// State that gets persisted to survive iOS Safari page refreshes
+interface PersistedState {
+  step: ImportStep;
+  extractedText: string;
+  manualPrompt: string;
+  manualResponse: string;
+  manualVisionResponse: string;
+  ocrConfidence: number | null;
+  ocrQuality: OcrQualityAssessment | null;
+  error: string | null;
+  // Compressed thumbnail for display when resuming (not the full image)
+  imageThumbnail: string | null;
+}
 
 export function PhotoImportTab() {
   const navigate = useNavigate();
@@ -34,6 +49,56 @@ export function PhotoImportTab() {
   const [sourceImage, setSourceImage] = useState<RecipeImage | null>(null);
   const [ocrQuality, setOcrQuality] = useState<OcrQualityAssessment | null>(null);
   const [imageBlob, setImageBlob] = useState<Blob | null>(null);
+  const [wasRestored, setWasRestored] = useState(false);
+  const [imageThumbnail, setImageThumbnail] = useState<string | null>(null);
+
+  // Combine state for persistence
+  const persistedState = useMemo((): PersistedState => ({
+    step,
+    extractedText,
+    manualPrompt,
+    manualResponse,
+    manualVisionResponse,
+    ocrConfidence,
+    ocrQuality,
+    error,
+    imageThumbnail,
+  }), [step, extractedText, manualPrompt, manualResponse, manualVisionResponse, ocrConfidence, ocrQuality, error, imageThumbnail]);
+
+  // Restore callback
+  const handleRestoreState = useCallback((state: Partial<PersistedState>) => {
+    if (state.step) setStep(state.step);
+    if (state.extractedText) setExtractedText(state.extractedText);
+    if (state.manualPrompt) setManualPrompt(state.manualPrompt);
+    if (state.manualResponse !== undefined) setManualResponse(state.manualResponse);
+    if (state.manualVisionResponse !== undefined) setManualVisionResponse(state.manualVisionResponse);
+    if (state.ocrConfidence !== undefined) setOcrConfidence(state.ocrConfidence);
+    if (state.ocrQuality !== undefined) setOcrQuality(state.ocrQuality);
+    if (state.error !== undefined) setError(state.error);
+    if (state.imageThumbnail) {
+      setImageThumbnail(state.imageThumbnail);
+      setPreviewUrl(state.imageThumbnail); // Use thumbnail as preview when restoring
+    }
+
+    // Mark as restored if we're past the upload step
+    if (state.step && state.step !== 'upload') {
+      setWasRestored(true);
+    }
+  }, []);
+
+  // Check if state is worth persisting (user has made progress in manual workflow)
+  const shouldPersist = useCallback((state: PersistedState): boolean => {
+    // Persist if user is in manual workflow steps (where app switching happens)
+    const manualSteps: ImportStep[] = ['manual-prompt', 'manual-response', 'manual-vision-prompt', 'manual-vision-response', 'ocr-review'];
+    return manualSteps.includes(state.step);
+  }, []);
+
+  const { clearPersistedState } = useImportStatePersistence(
+    'photo',
+    persistedState,
+    handleRestoreState,
+    shouldPersist
+  );
 
   useEffect(() => {
     const checkApiMode = async () => {
@@ -139,6 +204,17 @@ export function PhotoImportTab() {
     // Store the image blob for potential vision mode
     setImageBlob(selectedFile);
 
+    // Create a compressed thumbnail for state persistence (survives iOS Safari refresh)
+    try {
+      const thumbnail = await compressImageForStorage(selectedFile);
+      if (thumbnail) {
+        setImageThumbnail(thumbnail);
+      }
+    } catch (err) {
+      console.warn('Failed to create thumbnail for persistence:', err);
+      // Continue without thumbnail - not critical
+    }
+
     // Create a RecipeImage from the uploaded file for attachment
     try {
       const recipeImage = await imageService.createRecipeImage(
@@ -224,13 +300,49 @@ export function PhotoImportTab() {
   };
 
   const handleCopyVisionPrompt = async () => {
-    try {
-      await navigator.clipboard.writeText(RECIPE_VISION_PROMPT);
-      setVisionPromptCopied(true);
-      setTimeout(() => setVisionPromptCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(RECIPE_VISION_PROMPT);
+        setVisionPromptCopied(true);
+        setTimeout(() => setVisionPromptCopied(false), 2000);
+        return;
+      } catch (err) {
+        console.warn('Clipboard API failed, trying fallback:', err);
+      }
     }
+
+    // Fallback for iOS Safari and older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = RECIPE_VISION_PROMPT;
+
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.position = 'fixed';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, RECIPE_VISION_PROMPT.length);
+
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        setVisionPromptCopied(true);
+        setTimeout(() => setVisionPromptCopied(false), 2000);
+      }
+    } catch (err) {
+      console.error('Fallback copy failed:', err);
+    }
+
+    document.body.removeChild(textArea);
   };
 
   const handleManualVisionResponseSubmit = () => {
@@ -248,13 +360,49 @@ export function PhotoImportTab() {
   };
 
   const handleCopyPrompt = async () => {
-    try {
-      await navigator.clipboard.writeText(manualPrompt);
-      setPromptCopied(true);
-      setTimeout(() => setPromptCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(manualPrompt);
+        setPromptCopied(true);
+        setTimeout(() => setPromptCopied(false), 2000);
+        return;
+      } catch (err) {
+        console.warn('Clipboard API failed, trying fallback:', err);
+      }
     }
+
+    // Fallback for iOS Safari and older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = manualPrompt;
+
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.position = 'fixed';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, manualPrompt.length);
+
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        setPromptCopied(true);
+        setTimeout(() => setPromptCopied(false), 2000);
+      }
+    } catch (err) {
+      console.error('Fallback copy failed:', err);
+    }
+
+    document.body.removeChild(textArea);
   };
 
   const handleManualResponseSubmit = () => {
@@ -278,6 +426,7 @@ export function PhotoImportTab() {
     try {
       const formData = recipeImportService.convertToRecipeFormData(parsedRecipe, sourceImage || undefined);
       const newRecipe = await recipeRepository.create(formData);
+      clearPersistedState(); // Clear persisted state on successful save
       navigate(`/recipes/${newRecipe.id}`);
     } catch (err) {
       setError(`Failed to save recipe: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -294,6 +443,7 @@ export function PhotoImportTab() {
     // when editing before save. This is a limitation of the current approach.
     const formData = recipeImportService.convertToRecipeFormData(parsedRecipe);
     sessionStorage.setItem('importedRecipe', JSON.stringify(formData));
+    clearPersistedState(); // Clear persisted state when editing
     navigate('/recipes/new?imported=true');
   };
 
@@ -311,6 +461,9 @@ export function PhotoImportTab() {
     setOcrQuality(null);
     setImageBlob(null);
     setVisionPromptCopied(false);
+    setWasRestored(false);
+    setImageThumbnail(null);
+    clearPersistedState(); // Clear persisted state when starting over
     handleRemoveFile();
   };
 
@@ -478,6 +631,12 @@ export function PhotoImportTab() {
     return (
       <div className={styles.container}>
         <div className={styles.reviewSection}>
+          {wasRestored && (
+            <div className={styles.restoredBanner}>
+              <RotateCcw size={16} />
+              <span>Your progress was restored. Pick up where you left off!</span>
+            </div>
+          )}
           <div className={styles.warningBanner}>
             <AlertTriangle size={24} />
             <div>
@@ -553,6 +712,12 @@ export function PhotoImportTab() {
     return (
       <div className={styles.container}>
         <div className={styles.manualSection}>
+          {wasRestored && (
+            <div className={styles.restoredBanner}>
+              <RotateCcw size={16} />
+              <span>Your progress was restored. Pick up where you left off!</span>
+            </div>
+          )}
           <h3>Step 1: Copy this prompt to Claude</h3>
           <p className={styles.instruction}>
             Text was extracted from your image. Copy the prompt below and paste it into a Claude conversation.
@@ -595,6 +760,12 @@ export function PhotoImportTab() {
     return (
       <div className={styles.container}>
         <div className={styles.manualSection}>
+          {wasRestored && (
+            <div className={styles.restoredBanner}>
+              <RotateCcw size={16} />
+              <span>Your progress was restored. Pick up where you left off!</span>
+            </div>
+          )}
           <h3>Step 2: Paste Claude&apos;s response</h3>
           <p className={styles.instruction}>
             Copy the JSON response from Claude and paste it below.
@@ -630,6 +801,12 @@ export function PhotoImportTab() {
     return (
       <div className={styles.container}>
         <div className={styles.manualSection}>
+          {wasRestored && (
+            <div className={styles.restoredBanner}>
+              <RotateCcw size={16} />
+              <span>Your progress was restored. Pick up where you left off!</span>
+            </div>
+          )}
           <h3>Step 1: Download the image</h3>
           <p className={styles.instruction}>
             Download your recipe image, then upload it to Claude along with the prompt below.
@@ -684,6 +861,12 @@ export function PhotoImportTab() {
     return (
       <div className={styles.container}>
         <div className={styles.manualSection}>
+          {wasRestored && (
+            <div className={styles.restoredBanner}>
+              <RotateCcw size={16} />
+              <span>Your progress was restored. Pick up where you left off!</span>
+            </div>
+          )}
           <h3>Step 3: Paste Claude&apos;s response</h3>
           <p className={styles.instruction}>
             Copy the JSON response from Claude and paste it below.

@@ -1,13 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Copy, Check, AlertCircle, ChevronRight, Loader2, Globe, ExternalLink, Tag } from 'lucide-react';
+import { Sparkles, Copy, Check, AlertCircle, ChevronRight, Loader2, Globe, ExternalLink, Tag, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { recipeImportService, urlScraperService, tagScanningService } from '@/services';
 import { recipeRepository } from '@/db';
+import { useImportStatePersistence } from '@/hooks';
 import type { ParsedRecipe, AiParsingMode } from '@/types';
 import styles from './UrlImportTab.module.css';
 
 type ImportStep = 'input' | 'fetching' | 'parsing' | 'manual-prompt' | 'manual-response' | 'preview' | 'error';
+
+// State that gets persisted to survive iOS Safari page refreshes
+interface PersistedState {
+  step: ImportStep;
+  url: string;
+  rawText: string;
+  manualPrompt: string;
+  manualResponse: string;
+  error: string | null;
+}
 
 export function UrlImportTab() {
   const navigate = useNavigate();
@@ -23,6 +34,46 @@ export function UrlImportTab() {
   const [isSaving, setIsSaving] = useState(false);
   const [usedSchemaOrg, setUsedSchemaOrg] = useState(false);
   const [rawText, setRawText] = useState('');
+  const [wasRestored, setWasRestored] = useState(false);
+
+  // Combine state for persistence
+  const persistedState = useMemo((): PersistedState => ({
+    step,
+    url,
+    rawText,
+    manualPrompt,
+    manualResponse,
+    error,
+  }), [step, url, rawText, manualPrompt, manualResponse, error]);
+
+  // Restore callback
+  const handleRestoreState = useCallback((state: Partial<PersistedState>) => {
+    if (state.step) setStep(state.step);
+    if (state.url) setUrl(state.url);
+    if (state.rawText) setRawText(state.rawText);
+    if (state.manualPrompt) setManualPrompt(state.manualPrompt);
+    if (state.manualResponse !== undefined) setManualResponse(state.manualResponse);
+    if (state.error !== undefined) setError(state.error);
+
+    // Mark as restored if we're past the input step
+    if (state.step && state.step !== 'input') {
+      setWasRestored(true);
+    }
+  }, []);
+
+  // Check if state is worth persisting (user has made progress)
+  const shouldPersist = useCallback((state: PersistedState): boolean => {
+    // Persist if user is in manual workflow steps (where app switching happens)
+    const manualSteps: ImportStep[] = ['manual-prompt', 'manual-response'];
+    return manualSteps.includes(state.step) || (state.step === 'input' && state.url.length > 0);
+  }, []);
+
+  const { clearPersistedState } = useImportStatePersistence(
+    'url',
+    persistedState,
+    handleRestoreState,
+    shouldPersist
+  );
 
   useEffect(() => {
     const checkApiMode = async () => {
@@ -102,13 +153,54 @@ export function UrlImportTab() {
   };
 
   const handleCopyPrompt = async () => {
-    try {
-      await navigator.clipboard.writeText(manualPrompt);
-      setPromptCopied(true);
-      setTimeout(() => setPromptCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(manualPrompt);
+        setPromptCopied(true);
+        setTimeout(() => setPromptCopied(false), 2000);
+        return;
+      } catch (err) {
+        console.warn('Clipboard API failed, trying fallback:', err);
+      }
     }
+
+    // Fallback for iOS Safari and older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = manualPrompt;
+
+    // Avoid scrolling to bottom on iOS
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.position = 'fixed';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    // For iOS
+    textArea.setSelectionRange(0, manualPrompt.length);
+
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        setPromptCopied(true);
+        setTimeout(() => setPromptCopied(false), 2000);
+      } else {
+        console.error('execCommand copy failed');
+      }
+    } catch (err) {
+      console.error('Fallback copy failed:', err);
+    }
+
+    document.body.removeChild(textArea);
   };
 
   const handleManualResponseSubmit = () => {
@@ -134,6 +226,7 @@ export function UrlImportTab() {
     try {
       const formData = recipeImportService.convertToRecipeFormData(parsedRecipe);
       const newRecipe = await recipeRepository.create(formData);
+      clearPersistedState(); // Clear persisted state on successful save
       navigate(`/recipes/${newRecipe.id}`);
     } catch (err) {
       setError(`Failed to save recipe: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -148,6 +241,7 @@ export function UrlImportTab() {
 
     const formData = recipeImportService.convertToRecipeFormData(parsedRecipe);
     sessionStorage.setItem('importedRecipe', JSON.stringify(formData));
+    clearPersistedState(); // Clear persisted state when editing
     navigate('/recipes/new?imported=true');
   };
 
@@ -159,6 +253,8 @@ export function UrlImportTab() {
     setManualResponse('');
     setRawText('');
     setUsedSchemaOrg(false);
+    setWasRestored(false);
+    clearPersistedState(); // Clear persisted state when starting over
   };
 
   const handleRetryWithManual = () => {
@@ -251,6 +347,12 @@ export function UrlImportTab() {
     return (
       <div className={styles.container}>
         <div className={styles.manualSection}>
+          {wasRestored && (
+            <div className={styles.restoredBanner}>
+              <RotateCcw size={16} />
+              <span>Your progress was restored. Pick up where you left off!</span>
+            </div>
+          )}
           <h3>Step 1: Copy this prompt to Claude</h3>
           <p className={styles.instruction}>
             The page didn&apos;t have structured recipe data. Copy the text below and paste it into a Claude conversation.
@@ -287,6 +389,12 @@ export function UrlImportTab() {
     return (
       <div className={styles.container}>
         <div className={styles.manualSection}>
+          {wasRestored && (
+            <div className={styles.restoredBanner}>
+              <RotateCcw size={16} />
+              <span>Your progress was restored. Pick up where you left off!</span>
+            </div>
+          )}
           <h3>Step 2: Paste Claude&apos;s response</h3>
           <p className={styles.instruction}>
             Copy the JSON response from Claude and paste it below.
