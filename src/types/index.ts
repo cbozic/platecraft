@@ -23,3 +23,6 @@ export interface PlatecraftExport {
 }
 
 export const CURRENT_EXPORT_VERSION = '1.1';
+
+// Re-export encryption types from cryptoService
+export type { EncryptedField, EncryptedExport } from '@/services/cryptoService';

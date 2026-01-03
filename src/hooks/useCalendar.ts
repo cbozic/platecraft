@@ -10,7 +10,7 @@ import {
   endOfWeek,
 } from 'date-fns';
 import { db, mealPlanRepository, recipeRepository, settingsRepository } from '@/db';
-import { icalService } from '@/services';
+import { icalService, cryptoService } from '@/services';
 import type { PlannedMeal, MealSlot, Recipe, CalendarView, MealExtraItem, ExternalEvent, ExternalCalendar } from '@/types';
 
 interface UseCalendarOptions {
@@ -74,11 +74,29 @@ export function useCalendar(options: UseCalendarOptions = {}) {
 
         // Load external events from iCal calendars
         try {
-          const icalCalendars = await db.externalCalendars
+          const icalCalendarsRaw = await db.externalCalendars
             .where('provider')
             .equals('ical')
             .filter((c: ExternalCalendar) => c.isVisible)
             .toArray();
+
+          // Decrypt icalUrl for each calendar if encrypted
+          const icalCalendars = await Promise.all(
+            icalCalendarsRaw.map(async (calendar) => {
+              if (calendar.icalUrl) {
+                try {
+                  const parsed = JSON.parse(calendar.icalUrl);
+                  if (cryptoService.isEncryptedField(parsed)) {
+                    const decryptedUrl = await cryptoService.decryptField(parsed);
+                    return { ...calendar, icalUrl: decryptedUrl };
+                  }
+                } catch {
+                  // Not JSON/encrypted, use as-is (legacy plaintext)
+                }
+              }
+              return calendar;
+            })
+          );
 
           if (icalCalendars.length > 0) {
             // Build color map from calendars
@@ -115,7 +133,7 @@ export function useCalendar(options: UseCalendarOptions = {}) {
                 calendar.icalUrl &&
                 (!calendar.lastSynced || now - new Date(calendar.lastSynced).getTime() > staleThreshold)
               ) {
-                // Refresh in background (don't await)
+                // Refresh in background (don't await) - URL is already decrypted
                 icalService
                   .fetchIcalUrl(calendar.icalUrl, calendar.id)
                   .then(async (freshEvents) => {

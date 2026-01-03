@@ -20,3 +20,5 @@ export type { DuplicateCheckResult, BulkDuplicateCheckResult } from './duplicate
 export { tagScanningService } from './tagScanningService';
 export { recipeShareService } from './recipeShareService';
 export type { ShareOptions, ShareResult } from './recipeShareService';
+export { cryptoService } from './cryptoService';
+export type { EncryptedField, EncryptedExport } from './cryptoService';

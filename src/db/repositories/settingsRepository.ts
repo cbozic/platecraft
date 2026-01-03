@@ -2,6 +2,7 @@ import { db } from '../database';
 import type { UserSettings, MealSlot, StoreSectionInfo, AiParsingMode, PhotoImportMode } from '@/types';
 import { DEFAULT_SETTINGS } from '@/types/settings';
 import { v4 as uuidv4 } from 'uuid';
+import { cryptoService } from '@/services/cryptoService';
 
 const SETTINGS_ID = 'user-settings';
 
@@ -226,19 +227,42 @@ export const settingsRepository = {
     await this.update({ dailyCalorieGoal: goal });
   },
 
-  // Anthropic API key
+  // Anthropic API key (encrypted at rest)
   async setAnthropicApiKey(apiKey: string | undefined): Promise<void> {
-    await this.update({ anthropicApiKey: apiKey });
+    if (apiKey) {
+      const encrypted = await cryptoService.encryptField(apiKey);
+      // Store as JSON string to preserve the encrypted object structure
+      await this.update({ anthropicApiKey: JSON.stringify(encrypted) });
+    } else {
+      await this.update({ anthropicApiKey: undefined });
+    }
   },
 
   async getAnthropicApiKey(): Promise<string | undefined> {
     const settings = await this.get();
-    return settings.anthropicApiKey;
+    const value = settings.anthropicApiKey;
+    if (!value) return undefined;
+
+    // Try to parse as encrypted field
+    try {
+      const parsed = JSON.parse(value);
+      if (cryptoService.isEncryptedField(parsed)) {
+        return await cryptoService.decryptField(parsed);
+      }
+    } catch {
+      // Not JSON, must be legacy plaintext - migrate it
+      await this.setAnthropicApiKey(value);
+      return value;
+    }
+
+    // Fallback: treat as plaintext and migrate
+    await this.setAnthropicApiKey(value);
+    return value;
   },
 
   async hasAnthropicApiKey(): Promise<boolean> {
-    const apiKey = await this.getAnthropicApiKey();
-    return !!apiKey && apiKey.length > 0;
+    const settings = await this.get();
+    return !!settings.anthropicApiKey && settings.anthropicApiKey.length > 0;
   },
 
   // Preferred import mode
@@ -261,19 +285,42 @@ export const settingsRepository = {
     return settings.defaultPhotoImportMode || 'ocr';
   },
 
-  // USDA API key
+  // USDA API key (encrypted at rest)
   async setUsdaApiKey(apiKey: string | undefined): Promise<void> {
-    await this.update({ usdaApiKey: apiKey });
+    if (apiKey) {
+      const encrypted = await cryptoService.encryptField(apiKey);
+      // Store as JSON string to preserve the encrypted object structure
+      await this.update({ usdaApiKey: JSON.stringify(encrypted) });
+    } else {
+      await this.update({ usdaApiKey: undefined });
+    }
   },
 
   async getUsdaApiKey(): Promise<string | undefined> {
     const settings = await this.get();
-    return settings.usdaApiKey;
+    const value = settings.usdaApiKey;
+    if (!value) return undefined;
+
+    // Try to parse as encrypted field
+    try {
+      const parsed = JSON.parse(value);
+      if (cryptoService.isEncryptedField(parsed)) {
+        return await cryptoService.decryptField(parsed);
+      }
+    } catch {
+      // Not JSON, must be legacy plaintext - migrate it
+      await this.setUsdaApiKey(value);
+      return value;
+    }
+
+    // Fallback: treat as plaintext and migrate
+    await this.setUsdaApiKey(value);
+    return value;
   },
 
   async hasUsdaApiKey(): Promise<boolean> {
-    const apiKey = await this.getUsdaApiKey();
-    return !!apiKey && apiKey.length > 0;
+    const settings = await this.get();
+    return !!settings.usdaApiKey && settings.usdaApiKey.length > 0;
   },
 
   // Reset to defaults

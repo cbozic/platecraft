@@ -5,9 +5,10 @@ import {
   shoppingRepository,
   settingsRepository,
 } from '@/db';
-import type { PlatecraftExport, Tag, Recipe } from '@/types';
+import type { PlatecraftExport, Tag, Recipe, ExternalCalendar } from '@/types';
 import { CURRENT_EXPORT_VERSION } from '@/types';
 import { imageService } from './imageService';
+import { cryptoService, type EncryptedExport } from './cryptoService';
 
 export interface ImportResult {
   success: boolean;
@@ -25,6 +26,7 @@ export interface ImportResult {
 export const dataService = {
   /**
    * Export all application data as a JSON object
+   * Decrypts sensitive fields so export contains plaintext
    */
   async exportAllData(): Promise<PlatecraftExport> {
     const [
@@ -34,8 +36,8 @@ export const dataService = {
       dayNotes,
       recurringMeals,
       shoppingLists,
-      settings,
-      externalCalendars,
+      rawSettings,
+      rawExternalCalendars,
     ] = await Promise.all([
       recipeRepository.getAll(),
       tagRepository.getAll(),
@@ -46,6 +48,33 @@ export const dataService = {
       settingsRepository.get(),
       db.externalCalendars.toArray(),
     ]);
+
+    // Decrypt API keys from settings (they're stored encrypted)
+    const settings = { ...rawSettings };
+    if (settings.anthropicApiKey) {
+      settings.anthropicApiKey = await settingsRepository.getAnthropicApiKey();
+    }
+    if (settings.usdaApiKey) {
+      settings.usdaApiKey = await settingsRepository.getUsdaApiKey();
+    }
+
+    // Decrypt calendar URLs
+    const externalCalendars = await Promise.all(
+      rawExternalCalendars.map(async (calendar): Promise<ExternalCalendar> => {
+        if (calendar.icalUrl) {
+          try {
+            const parsed = JSON.parse(calendar.icalUrl);
+            if (cryptoService.isEncryptedField(parsed)) {
+              const decryptedUrl = await cryptoService.decryptField(parsed);
+              return { ...calendar, icalUrl: decryptedUrl };
+            }
+          } catch {
+            // Not encrypted, use as-is
+          }
+        }
+        return calendar;
+      })
+    );
 
     // Only export custom tags (system tags are rebuilt on import)
     const customTags = allTags.filter((tag) => !tag.isSystem);
@@ -76,7 +105,7 @@ export const dataService = {
   },
 
   /**
-   * Download export data as a JSON file
+   * Download export data as a JSON file (unencrypted)
    */
   async downloadExport(): Promise<void> {
     const data = await this.exportAllData();
@@ -94,6 +123,38 @@ export const dataService = {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  },
+
+  /**
+   * Download export data as an encrypted JSON file
+   */
+  async downloadEncryptedExport(password: string): Promise<void> {
+    const data = await this.exportAllData();
+    const json = JSON.stringify(data, null, 2);
+
+    // Encrypt the entire JSON with the user's password
+    const encrypted = await cryptoService.encryptExport(json, password);
+
+    const blob = new Blob([JSON.stringify(encrypted, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `platecraft-backup-${date}.json`;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+
+  /**
+   * Check if data is an encrypted export
+   */
+  isEncryptedExport(data: unknown): data is EncryptedExport {
+    return cryptoService.isEncryptedExport(data);
   },
 
   /**
@@ -334,9 +395,9 @@ export const dataService = {
   },
 
   /**
-   * Read and parse a JSON file
+   * Read and parse a JSON file (returns raw parsed JSON, may be encrypted)
    */
-  async readImportFile(file: File): Promise<PlatecraftExport> {
+  async readImportFile(file: File): Promise<PlatecraftExport | EncryptedExport> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
@@ -345,7 +406,7 @@ export const dataService = {
           const text = event.target?.result as string;
           const data = JSON.parse(text);
           resolve(data);
-        } catch (err) {
+        } catch {
           reject(new Error('Failed to parse JSON file'));
         }
       };
@@ -356,6 +417,14 @@ export const dataService = {
 
       reader.readAsText(file);
     });
+  },
+
+  /**
+   * Decrypt an encrypted export file with the provided password
+   */
+  async decryptImportData(encryptedData: EncryptedExport, password: string): Promise<PlatecraftExport> {
+    const json = await cryptoService.decryptExport(encryptedData, password);
+    return JSON.parse(json);
   },
 
   /**

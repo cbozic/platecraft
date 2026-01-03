@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Calendar, Plus, Trash2, Eye, EyeOff, Download, AlertCircle, AlertTriangle, RefreshCw, Link, Upload } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Button, Input, Modal, ModalFooter } from '@/components/ui';
-import { icalService } from '@/services';
+import { icalService, cryptoService } from '@/services';
 import { db } from '@/db';
 import type { ExternalCalendar, ExternalEvent } from '@/types';
 import styles from './CalendarSettings.module.css';
@@ -56,7 +56,26 @@ export function CalendarSettings() {
         .where('provider')
         .equals('ical')
         .toArray();
-      setCalendars(icalCalendars);
+
+      // Decrypt icalUrl for each calendar if encrypted
+      const decryptedCalendars = await Promise.all(
+        icalCalendars.map(async (calendar) => {
+          if (calendar.icalUrl) {
+            try {
+              const parsed = JSON.parse(calendar.icalUrl);
+              if (cryptoService.isEncryptedField(parsed)) {
+                const decryptedUrl = await cryptoService.decryptField(parsed);
+                return { ...calendar, icalUrl: decryptedUrl };
+              }
+            } catch {
+              // Not JSON/encrypted, use as-is (legacy plaintext)
+            }
+          }
+          return calendar;
+        })
+      );
+
+      setCalendars(decryptedCalendars);
     } catch (err) {
       console.error('Failed to load calendars:', err);
       setError('Failed to load calendars');
@@ -118,26 +137,34 @@ export function CalendarSettings() {
 
     // Save the calendar regardless of fetch success
     try {
-      const newCalendar: ExternalCalendar = {
+      // Encrypt the URL before storing in DB
+      const encryptedUrl = await cryptoService.encryptField(url);
+
+      const calendarForDb: ExternalCalendar = {
         id: calendarId,
         name: formData.name.trim(),
         provider: 'ical',
         color: formData.color,
         isVisible: true,
         sourceType: 'url',
-        icalUrl: url,
+        icalUrl: JSON.stringify(encryptedUrl),
         // If fetch succeeded, set lastSynced; otherwise leave undefined to trigger background sync
         lastSynced: fetchSucceeded ? new Date() : undefined,
       };
 
-      await db.externalCalendars.add(newCalendar);
+      await db.externalCalendars.add(calendarForDb);
 
       // Save fetched events if we got any (using bulkPut to handle any duplicates)
       if (fetchedEvents.length > 0) {
         await db.externalEvents.bulkPut(fetchedEvents);
       }
 
-      setCalendars((prev) => [...prev, newCalendar]);
+      // Keep plaintext URL in state for UI use
+      const calendarForState: ExternalCalendar = {
+        ...calendarForDb,
+        icalUrl: url,
+      };
+      setCalendars((prev) => [...prev, calendarForState]);
 
       // Reset form
       setFormData({

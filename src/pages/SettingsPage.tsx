@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
-import { Button, Card, CardHeader, CardBody, Modal, ModalFooter } from '@/components/ui';
+import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff, Lock } from 'lucide-react';
+import { Button, Card, CardHeader, CardBody, Modal, ModalFooter, Input } from '@/components/ui';
 import { TagManager, CalendarSettings, StapleIngredientsManager } from '@/components/settings';
 import { settingsRepository } from '@/db';
 import { dataService, type ImportResult } from '@/services';
-import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport, PhotoImportMode } from '@/types';
+import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport, PhotoImportMode, EncryptedExport } from '@/types';
 import styles from './SettingsPage.module.css';
 
 export function SettingsPage() {
@@ -40,6 +40,20 @@ export function SettingsPage() {
   const [usdaKeyInput, setUsdaKeyInput] = useState('');
   const [showUsdaKey, setShowUsdaKey] = useState(false);
   const [usdaKeySaved, setUsdaKeySaved] = useState(false);
+
+  // Export encryption state
+  const [exportPasswordModalOpen, setExportPasswordModalOpen] = useState(false);
+  const [exportPassword, setExportPassword] = useState('');
+  const [exportPasswordConfirm, setExportPasswordConfirm] = useState('');
+  const [showExportPassword, setShowExportPassword] = useState(false);
+  const [exportPasswordError, setExportPasswordError] = useState<string | null>(null);
+
+  // Import decryption state
+  const [importPasswordModalOpen, setImportPasswordModalOpen] = useState(false);
+  const [importPassword, setImportPassword] = useState('');
+  const [showImportPassword, setShowImportPassword] = useState(false);
+  const [importPasswordError, setImportPasswordError] = useState<string | null>(null);
+  const [pendingEncryptedImport, setPendingEncryptedImport] = useState<EncryptedExport | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -130,16 +144,47 @@ export function SettingsPage() {
     setSettings({ ...settings, dailyCalorieGoal: value });
   };
 
-  const handleExport = async () => {
+  const handleExportClick = () => {
+    // Show password modal for encrypted export
+    setExportPassword('');
+    setExportPasswordConfirm('');
+    setExportPasswordError(null);
+    setExportPasswordModalOpen(true);
+  };
+
+  const handleExportWithPassword = async () => {
+    // Validate passwords match
+    if (exportPassword !== exportPasswordConfirm) {
+      setExportPasswordError('Passwords do not match');
+      return;
+    }
+
+    if (exportPassword.length < 4) {
+      setExportPasswordError('Password must be at least 4 characters');
+      return;
+    }
+
     setIsExporting(true);
+    setExportPasswordError(null);
+
     try {
-      await dataService.downloadExport();
+      await dataService.downloadEncryptedExport(exportPassword);
+      setExportPasswordModalOpen(false);
+      setExportPassword('');
+      setExportPasswordConfirm('');
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Failed to export data. Please try again.');
+      setExportPasswordError('Failed to export data. Please try again.');
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleExportClose = () => {
+    setExportPasswordModalOpen(false);
+    setExportPassword('');
+    setExportPasswordConfirm('');
+    setExportPasswordError(null);
   };
 
   const handleImportClick = () => {
@@ -154,19 +199,31 @@ export function SettingsPage() {
     setImportError(null);
     setImportResult(null);
     setImportData(null);
+    setImportPassword('');
+    setImportPasswordError(null);
+    setPendingEncryptedImport(null);
 
     try {
       const data = await dataService.readImportFile(file);
-      const validation = dataService.validateImportData(data);
 
-      if (!validation.valid) {
-        setImportError(`Invalid file format:\n${validation.errors.join('\n')}`);
+      // Check if the file is encrypted
+      if (dataService.isEncryptedExport(data)) {
+        // Show password modal for encrypted import
+        setPendingEncryptedImport(data);
+        setImportPasswordModalOpen(true);
+      } else {
+        // Validate unencrypted data
+        const validation = dataService.validateImportData(data);
+
+        if (!validation.valid) {
+          setImportError(`Invalid file format:\n${validation.errors.join('\n')}`);
+          setImportModalOpen(true);
+          return;
+        }
+
+        setImportData(data as PlatecraftExport);
         setImportModalOpen(true);
-        return;
       }
-
-      setImportData(data);
-      setImportModalOpen(true);
     } catch (error) {
       setImportError(`Failed to read file: ${error}`);
       setImportModalOpen(true);
@@ -174,6 +231,40 @@ export function SettingsPage() {
 
     // Reset file input
     e.target.value = '';
+  };
+
+  const handleImportDecrypt = async () => {
+    if (!pendingEncryptedImport) return;
+
+    setImportPasswordError(null);
+
+    try {
+      const decryptedData = await dataService.decryptImportData(pendingEncryptedImport, importPassword);
+
+      // Validate decrypted data
+      const validation = dataService.validateImportData(decryptedData);
+
+      if (!validation.valid) {
+        setImportPasswordError(`Invalid file format:\n${validation.errors.join('\n')}`);
+        return;
+      }
+
+      // Close password modal and open import modal
+      setImportPasswordModalOpen(false);
+      setPendingEncryptedImport(null);
+      setImportPassword('');
+      setImportData(decryptedData);
+      setImportModalOpen(true);
+    } catch (error) {
+      setImportPasswordError('Incorrect password or corrupted file');
+    }
+  };
+
+  const handleImportPasswordClose = () => {
+    setImportPasswordModalOpen(false);
+    setPendingEncryptedImport(null);
+    setImportPassword('');
+    setImportPasswordError(null);
   };
 
   const handleImportConfirm = async () => {
@@ -546,12 +637,10 @@ export function SettingsPage() {
             )}
             <div className={styles.dataActions}>
               <Button
-                variant="outline"
                 leftIcon={<Download size={18} />}
-                onClick={handleExport}
-                disabled={isExporting}
+                onClick={handleExportClick}
               >
-                {isExporting ? 'Exporting...' : 'Export All Data'}
+                Export All Data
               </Button>
               <Button
                 variant="outline"
@@ -721,6 +810,127 @@ export function SettingsPage() {
             </Button>
             <Button variant="danger" onClick={handleClearData} disabled={isClearing}>
               {isClearing ? 'Clearing...' : 'Clear All Data'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+
+      {/* Export Password Modal */}
+      <Modal
+        isOpen={exportPasswordModalOpen}
+        onClose={handleExportClose}
+        title="Encrypt Backup"
+        size="sm"
+      >
+        <div className={styles.passwordModal}>
+          <div className={styles.passwordInfo}>
+            <Lock size={24} />
+            <p>
+              Your backup will be encrypted with a password. You'll need this password to import
+              the backup later.
+            </p>
+          </div>
+
+          {exportPasswordError && (
+            <div className={styles.passwordError}>
+              <XCircle size={16} />
+              <span>{exportPasswordError}</span>
+            </div>
+          )}
+
+          <div className={styles.passwordField}>
+            <label htmlFor="export-password">Password</label>
+            <div className={styles.passwordInputWrapper}>
+              <Input
+                id="export-password"
+                type={showExportPassword ? 'text' : 'password'}
+                value={exportPassword}
+                onChange={(e) => setExportPassword(e.target.value)}
+                placeholder="Enter password"
+              />
+              <button
+                type="button"
+                className={styles.passwordToggle}
+                onClick={() => setShowExportPassword(!showExportPassword)}
+              >
+                {showExportPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.passwordField}>
+            <label htmlFor="export-password-confirm">Confirm Password</label>
+            <div className={styles.passwordInputWrapper}>
+              <Input
+                id="export-password-confirm"
+                type={showExportPassword ? 'text' : 'password'}
+                value={exportPasswordConfirm}
+                onChange={(e) => setExportPasswordConfirm(e.target.value)}
+                placeholder="Confirm password"
+              />
+            </div>
+          </div>
+
+          <ModalFooter>
+            <Button variant="outline" onClick={handleExportClose}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleExportWithPassword}
+              disabled={isExporting || !exportPassword || !exportPasswordConfirm}
+            >
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+
+      {/* Import Password Modal */}
+      <Modal
+        isOpen={importPasswordModalOpen}
+        onClose={handleImportPasswordClose}
+        title="Decrypt Backup"
+        size="sm"
+      >
+        <div className={styles.passwordModal}>
+          <div className={styles.passwordInfo}>
+            <Lock size={24} />
+            <p>This backup is encrypted. Enter the password to decrypt it.</p>
+          </div>
+
+          {importPasswordError && (
+            <div className={styles.passwordError}>
+              <XCircle size={16} />
+              <span>{importPasswordError}</span>
+            </div>
+          )}
+
+          <div className={styles.passwordField}>
+            <label htmlFor="import-password">Password</label>
+            <div className={styles.passwordInputWrapper}>
+              <Input
+                id="import-password"
+                type={showImportPassword ? 'text' : 'password'}
+                value={importPassword}
+                onChange={(e) => setImportPassword(e.target.value)}
+                placeholder="Enter password"
+              />
+              <button
+                type="button"
+                className={styles.passwordToggle}
+                onClick={() => setShowImportPassword(!showImportPassword)}
+              >
+                {showImportPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <ModalFooter>
+            <Button variant="outline" onClick={handleImportPasswordClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleImportDecrypt} disabled={!importPassword}>
+              Decrypt
             </Button>
           </ModalFooter>
         </div>
