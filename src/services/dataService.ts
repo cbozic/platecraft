@@ -148,6 +148,9 @@ export const dataService = {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+
+    // Track the backup date for reminder purposes
+    await settingsRepository.setLastBackupDate(new Date());
   },
 
   /**

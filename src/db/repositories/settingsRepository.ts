@@ -323,6 +323,16 @@ export const settingsRepository = {
     return !!settings.usdaApiKey && settings.usdaApiKey.length > 0;
   },
 
+  // Backup tracking
+  async setLastBackupDate(date: Date): Promise<void> {
+    await this.update({ lastBackupDate: date.toISOString() });
+  },
+
+  async getLastBackupDate(): Promise<Date | undefined> {
+    const settings = await this.get();
+    return settings.lastBackupDate ? new Date(settings.lastBackupDate) : undefined;
+  },
+
   // Reset to defaults
   async reset(): Promise<void> {
     await db.settings.put({ ...DEFAULT_SETTINGS, id: SETTINGS_ID });

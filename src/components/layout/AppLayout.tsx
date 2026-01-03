@@ -1,5 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import { Book, Calendar, ShoppingCart, Settings } from 'lucide-react';
+import { BackupReminderProvider } from '@/context/BackupReminderContext';
 import styles from './AppLayout.module.css';
 
 const navItems = [
@@ -11,8 +12,9 @@ const navItems = [
 
 export function AppLayout() {
   return (
-    <div className={styles.layout}>
-      <header className={styles.header}>
+    <BackupReminderProvider>
+      <div className={styles.layout}>
+        <header className={styles.header}>
         <div className={styles.logo}>
           <span className={styles.logoIcon}>🍽️</span>
           <span className={styles.logoText}>Platecraft</span>
@@ -53,6 +55,7 @@ export function AppLayout() {
           </NavLink>
         ))}
       </nav>
-    </div>
+      </div>
+    </BackupReminderProvider>
   );
 }

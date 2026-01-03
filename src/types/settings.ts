@@ -38,6 +38,9 @@ export interface UserSettings {
 
   // Nutrition API Settings
   usdaApiKey?: string; // USDA FoodData Central API key
+
+  // Backup tracking
+  lastBackupDate?: string; // ISO-8601 date string of last export
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {

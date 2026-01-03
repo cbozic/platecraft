@@ -53,7 +53,9 @@ const router = createBrowserRouter([
       },
     ],
   },
-]);
+], {
+  basename: '/platecraft',
+});
 
 function App() {
   useEffect(() => {
