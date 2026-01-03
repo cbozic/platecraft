@@ -86,8 +86,12 @@
   text-decoration: none;
 }
 
+.cardImageWrapper {
+  position: relative;
+}
+
 .cardImage {
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 3 / 1;
   background-color: var(--color-background-secondary);
   overflow: hidden;
 }
@@ -105,7 +109,20 @@
   width: 100%;
   height: 100%;
   font-size: 3rem;
-  opacity: 0.5;
+  opacity: 0.3;
+}
+
+.cardShareButton {
+  position: absolute;
+  top: var(--spacing-xs);
+  right: var(--spacing-xs);
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast);
+}
+
+.cardShareButton:hover {
+  background-color: rgba(0, 0, 0, 0.6);
 }
 
 .cardContent {
@@ -163,15 +180,19 @@
     flex-direction: row;
   }
 
-  .cardImage {
-    aspect-ratio: 1 / 1;
-    width: 100px;
-    min-width: 100px;
+  .cardImageWrapper {
     flex-shrink: 0;
   }
 
+  .cardImage {
+    aspect-ratio: 1 / 1;
+    width: 80px;
+    min-width: 80px;
+  }
+
+
   .placeholderImage {
-    font-size: 2rem;
+    font-size: 1.25rem;
   }
 
   .cardContent {

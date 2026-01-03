@@ -18,3 +18,5 @@ export type {
 export { duplicateDetectionService } from './duplicateDetectionService';
 export type { DuplicateCheckResult, BulkDuplicateCheckResult } from './duplicateDetectionService';
 export { tagScanningService } from './tagScanningService';
+export { recipeShareService } from './recipeShareService';
+export type { ShareOptions, ShareResult } from './recipeShareService';

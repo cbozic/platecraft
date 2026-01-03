@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, Heart, Clock, Users, Book, Link as LinkIcon, Apple } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
-import { ImageGallery, ServingsScaler } from '@/components/recipe';
+import { ImageGallery, ServingsScaler, ShareButton } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
 import { scaleQuantity, formatQuantity, getScaleLabel } from '@/utils/recipeScaling';
 import type { Recipe, Tag } from '@/types';
@@ -138,6 +138,7 @@ export function RecipeDetailPage() {
               Edit
             </Button>
           </Link>
+          <ShareButton recipe={recipe} />
           <Button variant="danger" leftIcon={<Trash2 size={18} />} onClick={handleDelete}>
             Delete
           </Button>

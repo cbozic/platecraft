@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { Plus, Search, Filter, Upload } from 'lucide-react';
 import { Button, Input, Card } from '@/components/ui';
-import { RecipeFilterPanel, getActiveFilterCount, DEFAULT_FILTERS } from '@/components/recipe';
+import { RecipeFilterPanel, getActiveFilterCount, DEFAULT_FILTERS, ShareButton } from '@/components/recipe';
 import type { RecipeFilters } from '@/components/recipe';
 import { recipeRepository } from '@/db';
 import type { Recipe } from '@/types';
@@ -249,19 +249,30 @@ export function RecipesPage() {
               }}
             >
               <Card hoverable padding="none">
-                <div className={styles.cardImage}>
-                  {recipe.images.find((img) => img.isPrimary)?.data ? (
-                    <img
-                      src={
-                        typeof recipe.images.find((img) => img.isPrimary)?.data === 'string'
-                          ? (recipe.images.find((img) => img.isPrimary)?.data as string)
-                          : URL.createObjectURL(recipe.images.find((img) => img.isPrimary)?.data as Blob)
-                      }
-                      alt={recipe.title}
-                    />
-                  ) : (
-                    <div className={styles.placeholderImage}>🍽️</div>
-                  )}
+                <div className={styles.cardImageWrapper}>
+                  <div className={styles.cardImage}>
+                    {recipe.images.find((img) => img.isPrimary)?.data ? (
+                      <img
+                        src={
+                          typeof recipe.images.find((img) => img.isPrimary)?.data === 'string'
+                            ? (recipe.images.find((img) => img.isPrimary)?.data as string)
+                            : URL.createObjectURL(recipe.images.find((img) => img.isPrimary)?.data as Blob)
+                        }
+                        alt={recipe.title}
+                      />
+                    ) : (
+                      <div className={styles.placeholderImage}>🍽️</div>
+                    )}
+                  </div>
+                  <div
+                    className={styles.cardShareButton}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                  >
+                    <ShareButton recipe={recipe} variant="icon" size="sm" />
+                  </div>
                 </div>
                 <div className={styles.cardContent}>
                   <h3 className={styles.cardTitle}>{recipe.title}</h3>

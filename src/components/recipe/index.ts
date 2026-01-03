@@ -5,3 +5,5 @@ export type { RecipeFilters } from './RecipeFilterPanel';
 export { ServingsScaler } from './ServingsScaler';
 export { NutritionLookup } from './NutritionLookup';
 export { IngredientNutritionCalculator } from './IngredientNutritionCalculator';
+export { ShareButton } from './ShareButton';
+export { ShareModal } from './ShareModal';
