@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { Button, Input, Card, CardBody } from '@/components/ui';
 import { ImageGallery, ImageUploader, NutritionLookup, IngredientNutritionCalculator } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
+import { useIOSInstallBanner } from '@/context/IOSInstallBannerContext';
 import type { Tag, Ingredient, RecipeImage, NutritionInfo } from '@/types';
 import { UNIT_INFO } from '@/types/units';
 import { DEFAULT_STORE_SECTIONS } from '@/types';
@@ -21,6 +22,7 @@ export function RecipeFormPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { triggerAfterImport } = useIOSInstallBanner();
   const isEditing = Boolean(id);
   const isImporting = searchParams.get('imported') === 'true';
 
@@ -189,6 +191,7 @@ export function RecipeFormPage() {
         navigate(`/recipes/${id}`);
       } else {
         const newRecipe = await recipeRepository.create(formData);
+        triggerAfterImport();
         navigate(`/recipes/${newRecipe.id}`);
       }
     } catch (error) {

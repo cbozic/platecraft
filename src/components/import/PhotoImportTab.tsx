@@ -6,6 +6,7 @@ import { recipeImportService, ocrService, imageService } from '@/services';
 import type { OcrProgress, OcrQualityAssessment } from '@/services';
 import { recipeRepository, settingsRepository } from '@/db';
 import { useImportStatePersistence, compressImageForStorage } from '@/hooks';
+import { useIOSInstallBanner } from '@/context/IOSInstallBannerContext';
 import type { ParsedRecipe, RecipeImage } from '@/types';
 import { RECIPE_VISION_PROMPT } from '@/types/import';
 import styles from './PhotoImportTab.module.css';
@@ -28,6 +29,7 @@ interface PersistedState {
 
 export function PhotoImportTab() {
   const navigate = useNavigate();
+  const { triggerAfterImport } = useIOSInstallBanner();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<ImportStep>('upload');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -554,6 +556,7 @@ export function PhotoImportTab() {
       const formData = recipeImportService.convertToRecipeFormData(parsedRecipe, sourceImages.length > 0 ? sourceImages : undefined);
       const newRecipe = await recipeRepository.create(formData);
       clearPersistedState(); // Clear persisted state on successful save
+      triggerAfterImport();
       navigate(`/recipes/${newRecipe.id}`);
     } catch (err) {
       setError(`Failed to save recipe: ${err instanceof Error ? err.message : 'Unknown error'}`);

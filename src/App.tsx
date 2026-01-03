@@ -11,6 +11,7 @@ import {
   SettingsPage,
 } from '@/pages';
 import { db } from '@/db';
+import { IOSInstallBannerProvider } from '@/context/IOSInstallBannerContext';
 import '@/styles/global.css';
 
 const router = createBrowserRouter([
@@ -60,7 +61,11 @@ function App() {
     db.initialize().catch(console.error);
   }, []);
 
-  return <RouterProvider router={router} />;
+  return (
+    <IOSInstallBannerProvider>
+      <RouterProvider router={router} />
+    </IOSInstallBannerProvider>
+  );
 }
 
 export default App;

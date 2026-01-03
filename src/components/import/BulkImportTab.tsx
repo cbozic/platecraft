@@ -24,6 +24,7 @@ import type {
   BulkImportProgress,
 } from '@/types/bulkImport';
 import type { Recipe } from '@/types/recipe';
+import { useIOSInstallBanner } from '@/context/IOSInstallBannerContext';
 import styles from './BulkImportTab.module.css';
 
 type Step = 'configure' | 'searching' | 'importing' | 'preview' | 'saving' | 'complete' | 'error';
@@ -34,6 +35,7 @@ const ALL_PROTEINS: ProteinCategory[] = ['beef', 'chicken', 'pork', 'vegetarian'
 
 export function BulkImportTab() {
   const navigate = useNavigate();
+  const { triggerAfterImport } = useIOSInstallBanner();
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const [step, setStep] = useState<Step>('configure');
@@ -192,6 +194,7 @@ export function BulkImportTab() {
       // Bulk create recipes
       await recipeRepository.bulkCreate(recipes);
 
+      triggerAfterImport();
       setStep('complete');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save recipes');

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui';
 import { recipeImportService } from '@/services';
 import { recipeRepository } from '@/db';
 import { useImportStatePersistence } from '@/hooks';
+import { useIOSInstallBanner } from '@/context/IOSInstallBannerContext';
 import type { ParsedRecipe } from '@/types';
 import styles from './TextImportTab.module.css';
 
@@ -21,6 +22,7 @@ interface PersistedState {
 
 export function TextImportTab() {
   const navigate = useNavigate();
+  const { triggerAfterImport } = useIOSInstallBanner();
   const [step, setStep] = useState<ImportStep>('input');
   const [rawText, setRawText] = useState('');
   const [parsedRecipe, setParsedRecipe] = useState<ParsedRecipe | null>(null);
@@ -175,6 +177,7 @@ export function TextImportTab() {
       const formData = recipeImportService.convertToRecipeFormData(parsedRecipe);
       const newRecipe = await recipeRepository.create(formData);
       clearPersistedState(); // Clear persisted state on successful save
+      triggerAfterImport();
       navigate(`/recipes/${newRecipe.id}`);
     } catch (err) {
       setError(`Failed to save recipe: ${err instanceof Error ? err.message : 'Unknown error'}`);
