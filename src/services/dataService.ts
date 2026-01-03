@@ -371,6 +371,39 @@ export const dataService = {
         }
       }
 
+      // Import external calendars
+      if (data.externalCalendars && data.externalCalendars.length > 0) {
+        const existingCalendars = await db.externalCalendars.toArray();
+        const existingIds = new Set(existingCalendars.map((c) => c.id));
+
+        for (const calendar of data.externalCalendars) {
+          if (mode === 'merge' && existingIds.has(calendar.id)) {
+            continue;
+          }
+
+          try {
+            // Re-encrypt the icalUrl for storage (it's decrypted in the export)
+            const calendarToImport = { ...calendar };
+            if (calendarToImport.icalUrl) {
+              const encrypted = await cryptoService.encryptField(calendarToImport.icalUrl);
+              calendarToImport.icalUrl = JSON.stringify(encrypted);
+            }
+
+            // Convert date fields to Date objects
+            if (calendarToImport.lastSynced) {
+              calendarToImport.lastSynced = new Date(calendarToImport.lastSynced);
+            }
+            if (calendarToImport.lastImported) {
+              calendarToImport.lastImported = new Date(calendarToImport.lastImported);
+            }
+
+            await db.externalCalendars.put(calendarToImport);
+          } catch (err) {
+            errors.push(`Failed to import calendar "${calendar.name}": ${err}`);
+          }
+        }
+      }
+
       // Import settings (only in replace mode or if specified)
       if (mode === 'replace' && data.settings) {
         try {

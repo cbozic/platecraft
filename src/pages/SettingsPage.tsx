@@ -31,6 +31,9 @@ export function SettingsPage() {
   const [clearModalOpen, setClearModalOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
+  // Data version for forcing child component refresh
+  const [dataVersion, setDataVersion] = useState(0);
+
   // API key state
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -278,6 +281,25 @@ export function SettingsPage() {
       // Refresh data stats
       const stats = await dataService.getDataStats();
       setDataStats(stats);
+
+      // Reload settings (especially important in replace mode where settings are imported)
+      const updatedSettings = await settingsRepository.get();
+      setSettings(updatedSettings);
+
+      // Update API key inputs with imported values (if any)
+      if (updatedSettings.anthropicApiKey) {
+        setApiKeyInput(updatedSettings.anthropicApiKey);
+      } else {
+        setApiKeyInput('');
+      }
+      if (updatedSettings.usdaApiKey) {
+        setUsdaKeyInput(updatedSettings.usdaApiKey);
+      } else {
+        setUsdaKeyInput('');
+      }
+
+      // Force child components to refresh by incrementing version
+      setDataVersion(prev => prev + 1);
     } catch (error) {
       setImportResult({
         success: false,
@@ -309,6 +331,9 @@ export function SettingsPage() {
 
       // Reload settings
       await loadData();
+
+      // Force child components to refresh by incrementing version
+      setDataVersion(prev => prev + 1);
     } catch (error) {
       console.error('Failed to clear data:', error);
       alert('Failed to clear data. Please try again.');
@@ -442,7 +467,7 @@ export function SettingsPage() {
             <h2 className={styles.sectionTitle}>Calendar Integration</h2>
           </CardHeader>
           <CardBody>
-            <CalendarSettings />
+            <CalendarSettings key={`calendars-${dataVersion}`} />
           </CardBody>
         </Card>
 
@@ -451,7 +476,7 @@ export function SettingsPage() {
             <h2 className={styles.sectionTitle}>Tags</h2>
           </CardHeader>
           <CardBody>
-            <TagManager />
+            <TagManager key={`tags-${dataVersion}`} />
           </CardBody>
         </Card>
 
@@ -460,7 +485,7 @@ export function SettingsPage() {
             <h2 className={styles.sectionTitle}>Shopping List Staples</h2>
           </CardHeader>
           <CardBody>
-            <StapleIngredientsManager />
+            <StapleIngredientsManager key={`staples-${dataVersion}`} />
           </CardBody>
         </Card>
 
