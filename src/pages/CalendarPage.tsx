@@ -39,6 +39,7 @@ export function CalendarPage() {
     mealsByDate,
     recipesById,
     externalEventsByDate,
+    calendarColorsById,
     isLoading,
     setView,
     goToPrevious,
@@ -369,6 +370,7 @@ export function CalendarPage() {
             mealSlots={mealSlots}
             recipesById={recipesById}
             externalEventsByDate={externalEventsByDate}
+            calendarColorsById={calendarColorsById}
             onDayClick={handleDayClick}
             onMealClick={handleMealClick}
             onAddMeal={handleAddMeal}
@@ -383,6 +385,7 @@ export function CalendarPage() {
             mealSlots={mealSlots}
             recipesById={recipesById}
             externalEventsByDate={externalEventsByDate}
+            calendarColorsById={calendarColorsById}
             onDayClick={handleDayClick}
             onMealClick={handleMealClick}
             onAddMeal={handleAddMeal}
@@ -399,6 +402,7 @@ export function CalendarPage() {
             mealSlots={mealSlots}
             recipesById={recipesById}
             externalEvents={externalEventsByDate.get(format(selectedDate, 'yyyy-MM-dd'))}
+            calendarColorsById={calendarColorsById}
             onAddMeal={handleAddMeal}
             onRemoveMeal={handleRemoveMeal}
             onMealClick={handleMealClick}

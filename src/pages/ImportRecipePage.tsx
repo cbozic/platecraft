@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Camera, Link as LinkIcon, FileText, Database } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui';
@@ -13,8 +14,76 @@ const TABS: { id: ImportMethod; label: string; icon: React.ReactNode }[] = [
   { id: 'bulk', label: 'Bulk Import', icon: <Database size={20} /> },
 ];
 
+const TAB_STORAGE_KEY = 'platecraft_import_active_tab';
+const TAB_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes, matching other import state
+
+function getStoredTab(): ImportMethod | null {
+  try {
+    const stored = localStorage.getItem(TAB_STORAGE_KEY);
+    if (!stored) return null;
+
+    const parsed = JSON.parse(stored);
+    if (Date.now() - parsed.timestamp > TAB_EXPIRY_MS) {
+      localStorage.removeItem(TAB_STORAGE_KEY);
+      return null;
+    }
+
+    // Validate it's a valid tab id
+    const validTabs: ImportMethod[] = ['photo', 'url', 'text', 'bulk'];
+    if (validTabs.includes(parsed.tab)) {
+      return parsed.tab;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function ImportRecipePage() {
-  const [activeTab, setActiveTab] = useState<ImportMethod>('text');
+  const [activeTab, setActiveTab] = useState<ImportMethod>('photo');
+  const hasRestoredRef = useRef(false);
+
+  // Restore tab from localStorage on mount
+  useEffect(() => {
+    if (hasRestoredRef.current) return;
+    hasRestoredRef.current = true;
+
+    const stored = getStoredTab();
+    if (stored && stored !== activeTab) {
+      setActiveTab(stored);
+    }
+  }, []);
+
+  // Persist active tab to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify({
+        tab: activeTab,
+        timestamp: Date.now(),
+      }));
+    } catch (err) {
+      console.warn('Failed to persist active tab:', err);
+    }
+  }, [activeTab]);
+
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  // Handle tab change with iOS Safari rendering workaround
+  const handleTabChange = (tab: ImportMethod) => {
+    // Use flushSync to force synchronous DOM update
+    flushSync(() => {
+      setActiveTab(tab);
+    });
+    // Force iOS Safari to repaint by toggling transform
+    if (tabsRef.current) {
+      tabsRef.current.style.transform = 'translateZ(0)';
+      requestAnimationFrame(() => {
+        if (tabsRef.current) {
+          tabsRef.current.style.transform = '';
+        }
+      });
+    }
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -43,13 +112,13 @@ export function ImportRecipePage() {
 
       <Card>
         <CardBody className={styles.cardBody}>
-          <div className={styles.tabs}>
+          <div className={styles.tabs} ref={tabsRef}>
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 className={`${styles.tab} ${activeTab === tab.id ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
               >
                 {tab.icon}
                 <span>{tab.label}</span>

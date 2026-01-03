@@ -15,6 +15,7 @@ interface DayCellProps {
   mealSlots: MealSlot[];
   recipesById: Map<string, { id: string; title: string }>;
   externalEvents?: ExternalEvent[];
+  calendarColorsById?: Map<string, string>;
   onClick: () => void;
   onMealClick: (meal: PlannedMeal) => void;
   onAddMeal: (slotId: string) => void;
@@ -35,6 +36,7 @@ export function DayCell({
   mealSlots,
   recipesById,
   externalEvents = [],
+  calendarColorsById,
   onClick,
   onMealClick,
   onAddMeal,
@@ -225,7 +227,12 @@ export function DayCell({
       {externalEvents.length > 0 && (
         <div className={styles.externalEvents}>
           {externalEvents.map((event) => (
-            <ExternalEventCard key={event.id} event={event} compact={compact} />
+            <ExternalEventCard
+              key={event.id}
+              event={event}
+              compact={compact}
+              color={calendarColorsById?.get(event.calendarId)}
+            />
           ))}
         </div>
       )}

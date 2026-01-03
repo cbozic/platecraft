@@ -5,7 +5,7 @@ import { Button } from '@/components/ui';
 import { recipeImportService, urlScraperService, tagScanningService } from '@/services';
 import { recipeRepository } from '@/db';
 import { useImportStatePersistence } from '@/hooks';
-import type { ParsedRecipe, AiParsingMode } from '@/types';
+import type { ParsedRecipe } from '@/types';
 import styles from './UrlImportTab.module.css';
 
 type ImportStep = 'input' | 'fetching' | 'parsing' | 'manual-prompt' | 'manual-response' | 'preview' | 'error';
@@ -26,7 +26,6 @@ export function UrlImportTab() {
   const [url, setUrl] = useState('');
   const [parsedRecipe, setParsedRecipe] = useState<ParsedRecipe | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preferredMode, setPreferredMode] = useState<AiParsingMode>('manual');
   const [apiAvailable, setApiAvailable] = useState(false);
   const [manualPrompt, setManualPrompt] = useState('');
   const [manualResponse, setManualResponse] = useState('');
@@ -76,13 +75,11 @@ export function UrlImportTab() {
   );
 
   useEffect(() => {
-    const checkApiMode = async () => {
+    const checkApiAvailability = async () => {
       const available = await recipeImportService.isApiModeAvailable();
       setApiAvailable(available);
-      const mode = await recipeImportService.getPreferredMode();
-      setPreferredMode(mode);
     };
-    checkApiMode();
+    checkApiAvailability();
   }, []);
 
   // Helper to detect and apply tags to a parsed recipe
@@ -126,8 +123,8 @@ export function UrlImportTab() {
       setRawText(result.rawText);
       setUsedSchemaOrg(false);
 
-      if (preferredMode === 'api' && apiAvailable) {
-        // Use API mode
+      // If API key is available, always use automatic mode
+      if (apiAvailable) {
         setStep('parsing');
         const parseResult = await recipeImportService.parseWithApi(result.rawText);
 
@@ -547,7 +544,7 @@ export function UrlImportTab() {
             <Button variant="outline" onClick={handleStartOver}>
               Start Over
             </Button>
-            {rawText && apiAvailable && preferredMode === 'api' && (
+            {rawText && apiAvailable && (
               <Button variant="outline" onClick={handleRetryWithManual}>
                 Try Manual Mode
               </Button>

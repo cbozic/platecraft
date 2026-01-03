@@ -10,6 +10,7 @@ interface MobileDayDetailProps {
   mealSlots: MealSlot[];
   recipesById: Map<string, { id: string; title: string }>;
   externalEvents?: ExternalEvent[];
+  calendarColorsById?: Map<string, string>;
   onAddMeal: (date: Date, slotId: string) => void;
   onRemoveMeal: (mealId: string) => void;
   onMealClick: (meal: PlannedMeal) => void;
@@ -21,6 +22,7 @@ export function MobileDayDetail({
   mealSlots,
   recipesById,
   externalEvents = [],
+  calendarColorsById,
   onAddMeal,
   onRemoveMeal,
   onMealClick,
@@ -89,7 +91,12 @@ export function MobileDayDetail({
         <div className={styles.externalEvents}>
           <h4 className={styles.eventsTitle}>Calendar Events</h4>
           {externalEvents.map((event) => (
-            <ExternalEventCard key={event.id} event={event} compact={false} />
+            <ExternalEventCard
+              key={event.id}
+              event={event}
+              compact={false}
+              color={calendarColorsById?.get(event.calendarId)}
+            />
           ))}
         </div>
       )}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Calendar, Plus, Trash2, Eye, EyeOff, Download, AlertCircle, RefreshCw, Link, Upload } from 'lucide-react';
+import { Calendar, Plus, Trash2, Eye, EyeOff, Download, AlertCircle, AlertTriangle, RefreshCw, Link, Upload } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Button, Input, Modal, ModalFooter } from '@/components/ui';
 import { icalService } from '@/services';
@@ -31,6 +31,7 @@ export function CalendarSettings() {
   const [isAdding, setIsAdding] = useState(false);
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState<AddCalendarFormData>({
     name: '',
@@ -88,6 +89,7 @@ export function CalendarSettings() {
 
     setIsAdding(true);
     setError(null);
+    setWarning(null);
 
     // Check for common wrong URL formats
     const url = formData.url.trim();
@@ -100,12 +102,22 @@ export function CalendarSettings() {
       return;
     }
 
+    const calendarId = uuidv4();
+    let fetchSucceeded = false;
+    let fetchError: string | null = null;
+    let fetchedEvents: import('@/types').ExternalEvent[] = [];
+
+    // Try to fetch and validate the iCal URL, but don't block on failure
     try {
-      const calendarId = uuidv4();
+      fetchedEvents = await icalService.fetchIcalUrl(url, calendarId);
+      fetchSucceeded = true;
+    } catch (err) {
+      console.warn('Initial calendar fetch failed (will retry in background):', err);
+      fetchError = err instanceof Error ? err.message : 'Unknown error';
+    }
 
-      // Try to fetch and validate the iCal URL
-      await icalService.fetchIcalUrl(url, calendarId);
-
+    // Save the calendar regardless of fetch success
+    try {
       const newCalendar: ExternalCalendar = {
         id: calendarId,
         name: formData.name.trim(),
@@ -114,10 +126,17 @@ export function CalendarSettings() {
         isVisible: true,
         sourceType: 'url',
         icalUrl: url,
-        lastSynced: new Date(),
+        // If fetch succeeded, set lastSynced; otherwise leave undefined to trigger background sync
+        lastSynced: fetchSucceeded ? new Date() : undefined,
       };
 
       await db.externalCalendars.add(newCalendar);
+
+      // Save fetched events if we got any (using bulkPut to handle any duplicates)
+      if (fetchedEvents.length > 0) {
+        await db.externalEvents.bulkPut(fetchedEvents);
+      }
+
       setCalendars((prev) => [...prev, newCalendar]);
 
       // Reset form
@@ -127,13 +146,17 @@ export function CalendarSettings() {
         color: CALENDAR_COLORS[calendars.length % CALENDAR_COLORS.length],
       });
       setShowAddForm(false);
+
+      // Show warning if initial fetch failed but calendar was saved
+      if (!fetchSucceeded) {
+        setWarning(
+          `Calendar "${formData.name.trim()}" was added but initial sync failed (${fetchError}). ` +
+          'It will sync automatically when you view the calendar.'
+        );
+      }
     } catch (err) {
-      console.error('Failed to add calendar:', err);
-      setError(
-        err instanceof Error
-          ? `Failed to fetch calendar: ${err.message}`
-          : 'Failed to add calendar. Please check the URL and try again.'
-      );
+      console.error('Failed to save calendar:', err);
+      setError('Failed to save calendar. Please try again.');
     } finally {
       setIsAdding(false);
     }
@@ -176,10 +199,10 @@ export function CalendarSettings() {
     try {
       const events = await icalService.fetchIcalUrl(calendar.icalUrl, calendar.id);
 
-      // Clear old events and save new ones
+      // Replace old events with new ones (using bulkPut to handle duplicates gracefully)
       await db.externalEvents.where('calendarId').equals(calendar.id).delete();
       if (events.length > 0) {
-        await db.externalEvents.bulkAdd(events);
+        await db.externalEvents.bulkPut(events);
       }
 
       // Update last synced time
@@ -188,9 +211,13 @@ export function CalendarSettings() {
       setCalendars((prev) =>
         prev.map((c) => (c.id === calendar.id ? updatedCalendar : c))
       );
+
+      // Clear any pending sync warning since sync succeeded
+      setWarning(null);
     } catch (err) {
       console.error('Failed to sync calendar:', err);
-      setError(`Failed to sync "${calendar.name}". The URL may be invalid or unreachable.`);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Failed to sync "${calendar.name}": ${errorMsg}. Try again in a moment.`);
     } finally {
       setIsSyncing(null);
     }
@@ -362,6 +389,20 @@ export function CalendarSettings() {
         </div>
       )}
 
+      {warning && (
+        <div className={styles.warning}>
+          <AlertTriangle size={16} />
+          <span>{warning}</span>
+          <button
+            className={styles.dismissWarning}
+            onClick={() => setWarning(null)}
+            aria-label="Dismiss warning"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Info text */}
       <div className={styles.info}>
         <Calendar size={18} />
@@ -398,9 +439,14 @@ export function CalendarSettings() {
                   />
                   <div className={styles.calendarDetails}>
                     <span className={styles.calendarName}>{calendar.name}</span>
-                    {calendar.lastSynced && (
+                    {calendar.lastSynced ? (
                       <span className={styles.lastSynced}>
                         Last synced: {new Date(calendar.lastSynced).toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className={styles.pendingSync}>
+                        <RefreshCw size={10} className={styles.spinning} />
+                        Pending sync...
                       </span>
                     )}
                   </div>

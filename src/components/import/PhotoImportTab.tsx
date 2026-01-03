@@ -6,7 +6,7 @@ import { recipeImportService, ocrService, imageService } from '@/services';
 import type { OcrProgress, OcrQualityAssessment } from '@/services';
 import { recipeRepository } from '@/db';
 import { useImportStatePersistence, compressImageForStorage } from '@/hooks';
-import type { ParsedRecipe, AiParsingMode, RecipeImage } from '@/types';
+import type { ParsedRecipe, RecipeImage } from '@/types';
 import { RECIPE_VISION_PROMPT } from '@/types/import';
 import styles from './PhotoImportTab.module.css';
 
@@ -37,7 +37,6 @@ export function PhotoImportTab() {
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
   const [parsedRecipe, setParsedRecipe] = useState<ParsedRecipe | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preferredMode, setPreferredMode] = useState<AiParsingMode>('manual');
   const [apiAvailable, setApiAvailable] = useState(false);
   const [manualPrompt, setManualPrompt] = useState('');
   const [manualResponse, setManualResponse] = useState('');
@@ -101,13 +100,11 @@ export function PhotoImportTab() {
   );
 
   useEffect(() => {
-    const checkApiMode = async () => {
+    const checkApiAvailability = async () => {
       const available = await recipeImportService.isApiModeAvailable();
       setApiAvailable(available);
-      const mode = await recipeImportService.getPreferredMode();
-      setPreferredMode(mode);
     };
-    checkApiMode();
+    checkApiAvailability();
   }, []);
 
   // Clean up preview URLs on unmount
@@ -290,7 +287,8 @@ export function PhotoImportTab() {
   };
 
   const proceedToParsing = async (text: string) => {
-    if (preferredMode === 'api' && apiAvailable) {
+    // If API key is available, always use automatic mode
+    if (apiAvailable) {
       setStep('processing');
       const parseResult = await recipeImportService.parseWithApi(text);
 
@@ -610,11 +608,7 @@ export function PhotoImportTab() {
           {apiAvailable ? (
             <p className={styles.modeText}>
               <Sparkles size={16} />
-              <span>
-                {preferredMode === 'api'
-                  ? 'Using automatic parsing with Claude API'
-                  : 'Using manual paste mode (you can change this in Settings)'}
-              </span>
+              <span>Using automatic parsing with Claude API</span>
             </p>
           ) : (
             <p className={styles.modeText}>
@@ -1067,7 +1061,7 @@ export function PhotoImportTab() {
             <Button variant="outline" onClick={handleStartOver}>
               Start Over
             </Button>
-            {extractedText && apiAvailable && preferredMode === 'api' && (
+            {extractedText && apiAvailable && (
               <Button variant="outline" onClick={handleRetryWithManual}>
                 Try Manual Mode
               </Button>

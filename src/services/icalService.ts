@@ -265,36 +265,61 @@ export const icalService = {
   async fetchIcalUrl(url: string, calendarId: string): Promise<ExternalEvent[]> {
     let lastError: Error | null = null;
     let allForbidden = true;
+    const FETCH_TIMEOUT = 10000; // 10 seconds per attempt
+    const MAX_RETRIES = 2; // Try each proxy up to 2 times
 
-    // Try each CORS proxy
-    for (const proxyFn of CORS_PROXIES) {
+    // Helper to fetch with timeout
+    const fetchWithTimeout = async (proxyUrl: string): Promise<Response> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
       try {
-        const proxyUrl = proxyFn(url);
         const response = await fetch(proxyUrl, {
           headers: {
             'Accept': 'text/calendar, text/plain, */*',
           },
+          signal: controller.signal,
         });
+        return response;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
 
-        if (!response.ok) {
-          if (response.status !== 403) {
-            allForbidden = false;
+    // Try each CORS proxy with retries
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      for (const proxyFn of CORS_PROXIES) {
+        try {
+          const proxyUrl = proxyFn(url);
+          const response = await fetchWithTimeout(proxyUrl);
+
+          if (!response.ok) {
+            if (response.status !== 403) {
+              allForbidden = false;
+            }
+            throw new Error(`HTTP ${response.status}`);
           }
-          throw new Error(`HTTP ${response.status}`);
+
+          allForbidden = false;
+          const content = await response.text();
+
+          // Verify it looks like iCal content
+          if (!content.includes('BEGIN:VCALENDAR')) {
+            throw new Error('Invalid iCal format');
+          }
+
+          return parseIcalContent(content, calendarId);
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            lastError = new Error('Request timed out');
+          } else {
+            lastError = error instanceof Error ? error : new Error(String(error));
+          }
+          // Continue to next proxy
         }
-
-        allForbidden = false;
-        const content = await response.text();
-
-        // Verify it looks like iCal content
-        if (!content.includes('BEGIN:VCALENDAR')) {
-          throw new Error('Invalid iCal format');
-        }
-
-        return parseIcalContent(content, calendarId);
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        // Continue to next proxy
+      }
+      // Small delay before retry round
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 

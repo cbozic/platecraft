@@ -12,6 +12,7 @@ interface WeekViewProps {
   mealSlots: MealSlot[];
   recipesById: Map<string, { id: string; title: string }>;
   externalEventsByDate?: Map<string, ExternalEvent[]>;
+  calendarColorsById?: Map<string, string>;
   onDayClick: (date: Date) => void;
   onMealClick: (meal: PlannedMeal) => void;
   onAddMeal: (date: Date, slotId: string) => void;
@@ -26,6 +27,7 @@ export function WeekView({
   mealSlots,
   recipesById,
   externalEventsByDate,
+  calendarColorsById,
   onDayClick,
   onMealClick,
   onAddMeal,
@@ -64,6 +66,7 @@ export function WeekView({
             mealSlots={mealSlots}
             recipesById={recipesById}
             externalEvents={externalEventsByDate?.get(day.dateString) || []}
+            calendarColorsById={calendarColorsById}
             onClick={() => onDayClick(day.date)}
             onMealClick={onMealClick}
             onAddMeal={(slotId) => onAddMeal(day.date, slotId)}

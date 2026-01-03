@@ -28,6 +28,7 @@ export function useCalendar(options: UseCalendarOptions = {}) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([]);
+  const [calendarColorsById, setCalendarColorsById] = useState<Map<string, string>>(new Map());
 
   // Load settings and initial data
   useEffect(() => {
@@ -78,6 +79,13 @@ export function useCalendar(options: UseCalendarOptions = {}) {
             .toArray();
 
           if (icalCalendars.length > 0) {
+            // Build color map from calendars
+            const colorMap = new Map<string, string>();
+            for (const calendar of icalCalendars) {
+              colorMap.set(calendar.id, calendar.color);
+            }
+            setCalendarColorsById(colorMap);
+
             // Load cached events from database for the date range
             const allEvents: ExternalEvent[] = [];
 
@@ -109,10 +117,10 @@ export function useCalendar(options: UseCalendarOptions = {}) {
                 icalService
                   .fetchIcalUrl(calendar.icalUrl, calendar.id)
                   .then(async (freshEvents) => {
-                    // Update cache
+                    // Update cache (using bulkPut to handle any race conditions with duplicates)
                     await db.externalEvents.where('calendarId').equals(calendar.id).delete();
                     if (freshEvents.length > 0) {
-                      await db.externalEvents.bulkAdd(freshEvents);
+                      await db.externalEvents.bulkPut(freshEvents);
                     }
                     await db.externalCalendars.update(calendar.id, { lastSynced: new Date() });
 
@@ -311,6 +319,7 @@ export function useCalendar(options: UseCalendarOptions = {}) {
     isLoading,
     externalEvents,
     externalEventsByDate,
+    calendarColorsById,
 
     // Navigation
     setView,

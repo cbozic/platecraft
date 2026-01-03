@@ -39,6 +39,36 @@
   opacity: 0.7;
 }
 
+.warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background-color: var(--color-warning-light, rgba(245, 158, 11, 0.1));
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-warning, #d97706);
+}
+
+.warning span {
+  flex: 1;
+}
+
+.dismissWarning {
+  background: none;
+  border: none;
+  color: var(--color-warning, #d97706);
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0;
+  margin-left: var(--spacing-sm);
+}
+
+.dismissWarning:hover {
+  opacity: 0.7;
+}
+
 .info {
   display: flex;
   align-items: flex-start;
@@ -128,6 +158,14 @@
 .lastSynced {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
+}
+
+.pendingSync {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-warning, #d97706);
 }
 
 .calendarActions {

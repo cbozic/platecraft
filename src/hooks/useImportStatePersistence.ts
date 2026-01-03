@@ -170,7 +170,7 @@ export async function compressImageForStorage(blob: Blob, maxSize = 100000): Pro
  * Useful for debugging or when user wants to reset everything.
  */
 export function clearAllImportState(): void {
-  const keys = ['text', 'url', 'photo'];
+  const keys = ['text', 'url', 'photo', 'active_tab'];
   keys.forEach(key => {
     try {
       localStorage.removeItem(`${STORAGE_KEY_PREFIX}${key}`);

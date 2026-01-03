@@ -4,7 +4,7 @@ import { Button, Card, CardHeader, CardBody, Modal, ModalFooter } from '@/compon
 import { TagManager, CalendarSettings } from '@/components/settings';
 import { settingsRepository } from '@/db';
 import { dataService, type ImportResult } from '@/services';
-import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport, AiParsingMode } from '@/types';
+import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport } from '@/types';
 import styles from './SettingsPage.module.css';
 
 export function SettingsPage() {
@@ -100,12 +100,6 @@ export function SettingsPage() {
     await settingsRepository.setAnthropicApiKey(undefined);
     setSettings({ ...settings, anthropicApiKey: undefined });
     setApiKeyInput('');
-  };
-
-  const handleImportModeChange = async (mode: AiParsingMode) => {
-    if (!settings) return;
-    await settingsRepository.setPreferredImportMode(mode);
-    setSettings({ ...settings, preferredImportMode: mode });
   };
 
   const handleSaveUsdaKey = async () => {
@@ -495,26 +489,6 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className={styles.setting}>
-              <div className={styles.settingInfo}>
-                <h3 className={styles.settingLabel}>Default Import Mode</h3>
-                <p className={styles.settingDescription}>
-                  Choose how recipes are parsed when importing
-                </p>
-              </div>
-              <div className={styles.settingControl}>
-                <select
-                  value={settings.preferredImportMode || 'manual'}
-                  onChange={(e) => handleImportModeChange(e.target.value as AiParsingMode)}
-                  className={styles.select}
-                >
-                  <option value="manual">Manual (copy/paste to Claude)</option>
-                  <option value="api" disabled={!settings.anthropicApiKey}>
-                    Automatic (requires API key)
-                  </option>
-                </select>
-              </div>
-            </div>
           </CardBody>
         </Card>
 

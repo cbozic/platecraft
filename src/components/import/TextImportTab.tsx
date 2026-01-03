@@ -5,7 +5,7 @@ import { Button } from '@/components/ui';
 import { recipeImportService } from '@/services';
 import { recipeRepository } from '@/db';
 import { useImportStatePersistence } from '@/hooks';
-import type { ParsedRecipe, AiParsingMode } from '@/types';
+import type { ParsedRecipe } from '@/types';
 import styles from './TextImportTab.module.css';
 
 type ImportStep = 'input' | 'processing' | 'manual-prompt' | 'manual-response' | 'preview' | 'error';
@@ -25,7 +25,6 @@ export function TextImportTab() {
   const [rawText, setRawText] = useState('');
   const [parsedRecipe, setParsedRecipe] = useState<ParsedRecipe | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preferredMode, setPreferredMode] = useState<AiParsingMode>('manual');
   const [apiAvailable, setApiAvailable] = useState(false);
   const [manualPrompt, setManualPrompt] = useState('');
   const [manualResponse, setManualResponse] = useState('');
@@ -71,20 +70,18 @@ export function TextImportTab() {
   );
 
   useEffect(() => {
-    const checkApiMode = async () => {
+    const checkApiAvailability = async () => {
       const available = await recipeImportService.isApiModeAvailable();
       setApiAvailable(available);
-      const mode = await recipeImportService.getPreferredMode();
-      setPreferredMode(mode);
     };
-    checkApiMode();
+    checkApiAvailability();
   }, []);
 
   const handleParse = async () => {
     if (!rawText.trim()) return;
 
-    if (preferredMode === 'api' && apiAvailable) {
-      // Use API mode
+    // If API key is available, always use automatic mode
+    if (apiAvailable) {
       setStep('processing');
       setError(null);
 
@@ -255,11 +252,7 @@ Instructions:
           {apiAvailable ? (
             <p className={styles.modeText}>
               <Sparkles size={16} />
-              <span>
-                {preferredMode === 'api'
-                  ? 'Using automatic parsing with Claude API'
-                  : 'Using manual paste mode (you can change this in Settings)'}
-              </span>
+              <span>Using automatic parsing with Claude API</span>
             </p>
           ) : (
             <p className={styles.modeText}>
@@ -458,7 +451,7 @@ Instructions:
             <Button variant="outline" onClick={handleStartOver}>
               Start Over
             </Button>
-            {apiAvailable && preferredMode === 'api' && (
+            {apiAvailable && (
               <Button variant="outline" onClick={handleRetryWithManual}>
                 Try Manual Mode
               </Button>
