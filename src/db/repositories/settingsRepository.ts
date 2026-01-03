@@ -145,6 +145,82 @@ export const settingsRepository = {
     await this.update({ storeSections: updatedSections });
   },
 
+  // Staple ingredients
+  async getStapleIngredients(): Promise<string[]> {
+    const settings = await this.get();
+    return settings.stapleIngredients || [];
+  },
+
+  async addStapleIngredient(name: string): Promise<void> {
+    const settings = await this.get();
+    const normalized = name.trim().toLowerCase();
+    const currentStaples = settings.stapleIngredients || [];
+
+    // Avoid duplicates
+    if (currentStaples.includes(normalized)) {
+      return;
+    }
+
+    await this.update({
+      stapleIngredients: [...currentStaples, normalized],
+    });
+  },
+
+  async removeStapleIngredient(name: string): Promise<void> {
+    const settings = await this.get();
+    const normalized = name.trim().toLowerCase();
+    const currentStaples = settings.stapleIngredients || [];
+
+    await this.update({
+      stapleIngredients: currentStaples.filter((s) => s !== normalized),
+    });
+  },
+
+  async setStapleIngredients(ingredients: string[]): Promise<void> {
+    const normalized = ingredients
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean);
+    await this.update({ stapleIngredients: normalized });
+  },
+
+  // Staple exclusions
+  async getStapleExclusions(): Promise<string[]> {
+    const settings = await this.get();
+    return settings.stapleExclusions || [];
+  },
+
+  async addStapleExclusion(name: string): Promise<void> {
+    const settings = await this.get();
+    const normalized = name.trim().toLowerCase();
+    const currentExclusions = settings.stapleExclusions || [];
+
+    // Avoid duplicates
+    if (currentExclusions.includes(normalized)) {
+      return;
+    }
+
+    await this.update({
+      stapleExclusions: [...currentExclusions, normalized],
+    });
+  },
+
+  async removeStapleExclusion(name: string): Promise<void> {
+    const settings = await this.get();
+    const normalized = name.trim().toLowerCase();
+    const currentExclusions = settings.stapleExclusions || [];
+
+    await this.update({
+      stapleExclusions: currentExclusions.filter((s) => s !== normalized),
+    });
+  },
+
+  async setStapleExclusions(exclusions: string[]): Promise<void> {
+    const normalized = exclusions
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean);
+    await this.update({ stapleExclusions: normalized });
+  },
+
   // Daily calorie goal
   async setDailyCalorieGoal(goal: number | undefined): Promise<void> {
     await this.update({ dailyCalorieGoal: goal });

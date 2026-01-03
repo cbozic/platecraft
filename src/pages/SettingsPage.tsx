@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { Button, Card, CardHeader, CardBody, Modal, ModalFooter } from '@/components/ui';
-import { TagManager, CalendarSettings } from '@/components/settings';
+import { TagManager, CalendarSettings, StapleIngredientsManager } from '@/components/settings';
 import { settingsRepository } from '@/db';
 import { dataService, type ImportResult } from '@/services';
 import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport, PhotoImportMode } from '@/types';
@@ -361,6 +361,15 @@ export function SettingsPage() {
           </CardHeader>
           <CardBody>
             <TagManager />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className={styles.sectionTitle}>Shopping List Staples</h2>
+          </CardHeader>
+          <CardBody>
+            <StapleIngredientsManager />
           </CardBody>
         </Card>
 

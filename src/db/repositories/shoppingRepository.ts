@@ -3,6 +3,35 @@ import type { ShoppingList, ShoppingItem, AggregatedIngredient } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { mealPlanRepository } from './mealPlanRepository';
 import { recipeRepository } from './recipeRepository';
+import { settingsRepository } from './settingsRepository';
+
+// Helper function to auto-check staple ingredients
+async function applyStapleChecking(items: ShoppingItem[]): Promise<ShoppingItem[]> {
+  const [staples, exclusions] = await Promise.all([
+    settingsRepository.getStapleIngredients(),
+    settingsRepository.getStapleExclusions(),
+  ]);
+
+  if (staples.length === 0) {
+    return items;
+  }
+
+  // For each item, check if any staple is contained within the item name
+  // BUT also check if any exclusion pattern is present - exclusions override staples
+  return items.map((item) => {
+    const itemNameLower = item.name.toLowerCase();
+    const containsStaple = staples.some((staple) => itemNameLower.includes(staple));
+    const containsExclusion = exclusions.some((exclusion) => itemNameLower.includes(exclusion));
+
+    // Only auto-check if it contains a staple AND does NOT contain an exclusion
+    const isStaple = containsStaple && !containsExclusion;
+
+    return {
+      ...item,
+      isChecked: isStaple,
+    };
+  });
+}
 
 export const shoppingRepository = {
   // Shopping Lists
@@ -223,11 +252,14 @@ export const shoppingRepository = {
       });
     }
 
+    // Apply staple ingredient auto-checking
+    const itemsWithStaplesChecked = await applyStapleChecking(items);
+
     // Create the shopping list
     const list = await this.createList(name, startDate, endDate);
-    await this.updateList(list.id, { items });
+    await this.updateList(list.id, { items: itemsWithStaplesChecked });
 
-    return { ...list, items };
+    return { ...list, items: itemsWithStaplesChecked };
   },
 
   // Recurring items
@@ -251,15 +283,19 @@ export const shoppingRepository = {
     const original = await this.getListById(id);
     if (!original) throw new Error('Shopping list not found');
 
+    // Reset items and apply staple checking
+    const resetItems = original.items.map((item) => ({
+      ...item,
+      id: uuidv4(),
+      isChecked: false,
+    }));
+    const itemsWithStaplesChecked = await applyStapleChecking(resetItems);
+
     const now = new Date();
     const newList: ShoppingList = {
       id: uuidv4(),
       name: newName,
-      items: original.items.map((item) => ({
-        ...item,
-        id: uuidv4(),
-        isChecked: false,
-      })),
+      items: itemsWithStaplesChecked,
       dateRangeStart: original.dateRangeStart,
       dateRangeEnd: original.dateRangeEnd,
       createdAt: now,

@@ -24,6 +24,10 @@ export interface UserSettings {
   // Store sections
   storeSections: StoreSectionInfo[];
 
+  // Staple ingredients (auto-checked on new shopping lists)
+  stapleIngredients: string[];
+  stapleExclusions: string[]; // Patterns to exclude from staple matching
+
   // Daily nutritional goals (optional)
   dailyCalorieGoal?: number;
 
@@ -61,4 +65,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
     { id: 'household', name: 'Household', order: 10, isCustom: false },
     { id: 'other', name: 'Other', order: 11, isCustom: false },
   ],
+  stapleIngredients: [],
+  stapleExclusions: [],
 };
