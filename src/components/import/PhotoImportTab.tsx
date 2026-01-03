@@ -4,7 +4,7 @@ import { Sparkles, Copy, Check, AlertCircle, ChevronRight, Loader2, Upload, Imag
 import { Button } from '@/components/ui';
 import { recipeImportService, ocrService, imageService } from '@/services';
 import type { OcrProgress, OcrQualityAssessment } from '@/services';
-import { recipeRepository } from '@/db';
+import { recipeRepository, settingsRepository } from '@/db';
 import { useImportStatePersistence, compressImageForStorage } from '@/hooks';
 import type { ParsedRecipe, RecipeImage } from '@/types';
 import { RECIPE_VISION_PROMPT } from '@/types/import';
@@ -50,6 +50,7 @@ export function PhotoImportTab() {
   const [imageBlobs, setImageBlobs] = useState<Blob[]>([]);
   const [wasRestored, setWasRestored] = useState(false);
   const [imageThumbnails, setImageThumbnails] = useState<string[]>([]);
+  const [useVisionMode, setUseVisionMode] = useState(false);
 
   // Combine state for persistence
   const persistedState = useMemo((): PersistedState => ({
@@ -100,11 +101,15 @@ export function PhotoImportTab() {
   );
 
   useEffect(() => {
-    const checkApiAvailability = async () => {
+    const loadSettings = async () => {
       const available = await recipeImportService.isApiModeAvailable();
       setApiAvailable(available);
+
+      // Load default photo import mode preference
+      const defaultMode = await settingsRepository.getDefaultPhotoImportMode();
+      setUseVisionMode(defaultMode === 'vision');
     };
-    checkApiAvailability();
+    loadSettings();
   }, []);
 
   // Clean up preview URLs on unmount
@@ -190,6 +195,54 @@ export function PhotoImportTab() {
       fileInputRef.current.value = '';
     }
   }, [previewUrls]);
+
+  // Handle direct vision mode (skip OCR)
+  const handleDirectVisionMode = async () => {
+    if (selectedFiles.length === 0) return;
+
+    setError(null);
+
+    // Store the image blobs for vision processing
+    setImageBlobs(selectedFiles);
+
+    // Create thumbnails for potential state persistence
+    const thumbnails: string[] = [];
+    for (const file of selectedFiles) {
+      try {
+        const thumbnail = await compressImageForStorage(file);
+        if (thumbnail) thumbnails.push(thumbnail);
+      } catch (err) {
+        console.warn('Failed to create thumbnail:', err);
+      }
+    }
+    setImageThumbnails(thumbnails);
+
+    if (apiAvailable) {
+      // Use API vision mode
+      setStep('vision-processing');
+      const result = await recipeImportService.parseWithVision(selectedFiles[0]);
+
+      if (result.success && result.recipe) {
+        setParsedRecipe(result.recipe);
+        setStep('preview');
+      } else {
+        setError(result.error || 'Vision parsing failed. Try using OCR mode or manual mode.');
+        setStep('error');
+      }
+    } else {
+      // Manual vision mode - user will upload to Claude themselves
+      setStep('manual-vision-prompt');
+    }
+  };
+
+  // Handle the main action button click
+  const handleProcessImages = async () => {
+    if (useVisionMode) {
+      await handleDirectVisionMode();
+    } else {
+      await handleExtractText();
+    }
+  };
 
   const handleExtractText = async () => {
     if (selectedFiles.length === 0) return;
@@ -617,13 +670,36 @@ export function PhotoImportTab() {
           )}
         </div>
 
+        <div className={styles.visionToggle}>
+          <label className={styles.toggleLabel}>
+            <input
+              type="checkbox"
+              checked={useVisionMode}
+              onChange={(e) => setUseVisionMode(e.target.checked)}
+              className={styles.toggleInput}
+            />
+            <span className={styles.toggleSwitch} />
+            <span className={styles.toggleText}>
+              <Eye size={16} />
+              Skip OCR, use Vision
+            </span>
+          </label>
+          <p className={styles.toggleHint}>
+            {useVisionMode
+              ? 'Claude will read directly from the image. Best for handwritten recipes.'
+              : 'Text will be extracted first, then parsed. Best for printed text.'}
+          </p>
+        </div>
+
         <div className={styles.actions}>
           <Button
-            onClick={handleExtractText}
+            onClick={handleProcessImages}
             disabled={selectedFiles.length === 0}
-            rightIcon={<ChevronRight size={18} />}
+            rightIcon={useVisionMode ? <Eye size={18} /> : <ChevronRight size={18} />}
           >
-            Extract Text{selectedFiles.length > 1 ? ` from ${selectedFiles.length} Images` : ''}
+            {useVisionMode
+              ? `Use Vision${selectedFiles.length > 1 ? ' (first image)' : ''}`
+              : `Extract Text${selectedFiles.length > 1 ? ` from ${selectedFiles.length} Images` : ''}`}
           </Button>
         </div>
       </div>

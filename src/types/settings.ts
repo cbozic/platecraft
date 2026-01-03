@@ -5,6 +5,7 @@ import type { AiParsingMode } from './import';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type CalendarStartDay = 0 | 1; // 0 = Sunday, 1 = Monday
+export type PhotoImportMode = 'ocr' | 'vision'; // OCR first, or skip straight to vision
 
 export interface UserSettings {
   // Display
@@ -29,6 +30,7 @@ export interface UserSettings {
   // Recipe Import Settings
   anthropicApiKey?: string; // Stored locally, never sent anywhere except Anthropic
   preferredImportMode?: AiParsingMode; // 'api' or 'manual'
+  defaultPhotoImportMode?: PhotoImportMode; // 'ocr' or 'vision' - default behavior for photo import
 
   // Nutrition API Settings
   usdaApiKey?: string; // USDA FoodData Central API key

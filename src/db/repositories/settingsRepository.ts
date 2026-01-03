@@ -1,5 +1,5 @@
 import { db } from '../database';
-import type { UserSettings, MealSlot, StoreSectionInfo, AiParsingMode } from '@/types';
+import type { UserSettings, MealSlot, StoreSectionInfo, AiParsingMode, PhotoImportMode } from '@/types';
 import { DEFAULT_SETTINGS } from '@/types/settings';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -173,6 +173,16 @@ export const settingsRepository = {
   async getPreferredImportMode(): Promise<AiParsingMode> {
     const settings = await this.get();
     return settings.preferredImportMode || 'manual';
+  },
+
+  // Default photo import mode (OCR vs Vision)
+  async setDefaultPhotoImportMode(mode: PhotoImportMode): Promise<void> {
+    await this.update({ defaultPhotoImportMode: mode });
+  },
+
+  async getDefaultPhotoImportMode(): Promise<PhotoImportMode> {
+    const settings = await this.get();
+    return settings.defaultPhotoImportMode || 'ocr';
   },
 
   // USDA API key

@@ -4,7 +4,7 @@ import { Button, Card, CardHeader, CardBody, Modal, ModalFooter } from '@/compon
 import { TagManager, CalendarSettings } from '@/components/settings';
 import { settingsRepository } from '@/db';
 import { dataService, type ImportResult } from '@/services';
-import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport } from '@/types';
+import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport, PhotoImportMode } from '@/types';
 import styles from './SettingsPage.module.css';
 
 export function SettingsPage() {
@@ -100,6 +100,12 @@ export function SettingsPage() {
     await settingsRepository.setAnthropicApiKey(undefined);
     setSettings({ ...settings, anthropicApiKey: undefined });
     setApiKeyInput('');
+  };
+
+  const handlePhotoImportModeChange = async (mode: PhotoImportMode) => {
+    if (!settings) return;
+    await settingsRepository.setDefaultPhotoImportMode(mode);
+    setSettings({ ...settings, defaultPhotoImportMode: mode });
   };
 
   const handleSaveUsdaKey = async () => {
@@ -486,6 +492,28 @@ export function SettingsPage() {
                     </Button>
                   )}
                 </div>
+              </div>
+            </div>
+
+            <div className={styles.setting}>
+              <div className={styles.settingInfo}>
+                <h3 className={styles.settingLabel}>Default Photo Import Mode</h3>
+                <p className={styles.settingDescription}>
+                  Choose how photos are processed by default. OCR extracts text first (best for
+                  printed recipes), while Vision reads directly from the image (best for handwritten).
+                </p>
+              </div>
+              <div className={styles.settingControl}>
+                <select
+                  value={settings.defaultPhotoImportMode || 'ocr'}
+                  onChange={(e) =>
+                    handlePhotoImportModeChange(e.target.value as PhotoImportMode)
+                  }
+                  className={styles.select}
+                >
+                  <option value="ocr">OCR First (Recommended)</option>
+                  <option value="vision">Vision (Direct)</option>
+                </select>
               </div>
             </div>
 
