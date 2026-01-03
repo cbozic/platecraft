@@ -46,17 +46,54 @@
   border: 1px solid var(--color-border);
 }
 
+.dayRow.skipped {
+  opacity: 0.6;
+  background-color: var(--color-surface-disabled, var(--color-surface));
+}
+
 .dayHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--spacing-xs);
+  gap: var(--spacing-sm);
+}
+
+.skipLabel {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.skipLabel:hover {
+  color: var(--color-text-primary);
+}
+
+.skipCheckbox {
+  display: none;
+}
+
+.skipCheckbox:checked + .skipIcon {
+  color: var(--color-warning, #f59e0b);
+}
+
+.skipIcon {
+  transition: color var(--transition-fast);
+}
+
+.skippedLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-left: auto;
 }
 
 .dayName {
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
+  flex: 1;
 }
 
 .prioritySelect {

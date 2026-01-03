@@ -15,6 +15,7 @@ interface MealPlanAssistantModalProps {
   onComplete: () => void;
   mealSlots: MealSlot[];
   tags: Tag[];
+  weekStartsOn?: 0 | 1;
   defaultServings?: number;
 }
 
@@ -33,6 +34,7 @@ export function MealPlanAssistantModal({
   onComplete,
   mealSlots,
   tags,
+  weekStartsOn = 0,
   defaultServings = 4,
 }: MealPlanAssistantModalProps) {
   const assistant = useMealPlanAssistant({
@@ -124,9 +126,12 @@ export function MealPlanAssistantModal({
           {assistant.currentStep === 'dayRules' && (
             <DayTagRulesStep
               rules={assistant.config.dayTagRules}
+              skippedDays={assistant.config.skippedDays}
               availableTags={tags.filter((t) => !t.isHidden).sort((a, b) => a.name.localeCompare(b.name))}
+              weekStartsOn={weekStartsOn}
               onUpdateRule={assistant.updateDayRule}
               onClear={assistant.clearDayRules}
+              onToggleSkipDay={assistant.toggleSkipDay}
             />
           )}
 
@@ -136,10 +141,12 @@ export function MealPlanAssistantModal({
               endDate={assistant.config.endDate}
               selectedSlots={assistant.config.selectedSlots}
               defaultServings={assistant.config.defaultServings}
+              favoritesWeight={assistant.config.favoritesWeight}
               mealSlots={mealSlots}
               onDateRangeChange={assistant.setDateRange}
               onToggleSlot={assistant.toggleSlot}
               onServingsChange={assistant.setServings}
+              onFavoritesWeightChange={assistant.setFavoritesWeight}
             />
           )}
 

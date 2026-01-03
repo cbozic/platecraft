@@ -35,6 +35,7 @@ export function CalendarPage() {
     currentDate,
     view,
     weekStartsOn,
+    defaultServings,
     mealSlots,
     mealsByDate,
     recipesById,
@@ -442,6 +443,8 @@ export function CalendarPage() {
         }}
         mealSlots={mealSlots}
         tags={tags}
+        weekStartsOn={weekStartsOn}
+        defaultServings={defaultServings}
       />
     </div>
   );

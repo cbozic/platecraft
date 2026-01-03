@@ -23,6 +23,7 @@ export function Modal({
   showCloseButton = true,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const mouseDownTargetRef = useRef<EventTarget | null>(null);
 
   // Handle escape key
   useEffect(() => {
@@ -83,14 +84,29 @@ export function Modal({
 
   if (!isOpen) return null;
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (closeOnOverlayClick && e.target === e.currentTarget) {
+  const handleOverlayMouseDown = (e: React.MouseEvent) => {
+    mouseDownTargetRef.current = e.target;
+  };
+
+  const handleOverlayMouseUp = (e: React.MouseEvent) => {
+    // Only close if both mousedown AND mouseup happened on the overlay itself
+    // This prevents closing when dragging a slider and releasing outside the modal
+    if (
+      closeOnOverlayClick &&
+      e.target === e.currentTarget &&
+      mouseDownTargetRef.current === e.currentTarget
+    ) {
       onClose();
     }
+    mouseDownTargetRef.current = null;
   };
 
   return createPortal(
-    <div className={styles.overlay} onClick={handleOverlayClick}>
+    <div
+      className={styles.overlay}
+      onMouseDown={handleOverlayMouseDown}
+      onMouseUp={handleOverlayMouseUp}
+    >
       <div
         ref={modalRef}
         className={`${styles.modal} ${styles[size]}`}

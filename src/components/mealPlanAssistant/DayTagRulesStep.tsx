@@ -1,24 +1,33 @@
-import { Calendar, X } from 'lucide-react';
+import { Calendar, X, SkipForward } from 'lucide-react';
 import type { Tag } from '@/types';
 import type { DayTagRule } from '@/types/mealPlanAssistant';
 import { Button } from '@/components/ui';
+import { getDayNames } from '@/utils/calendar';
 import styles from './DayTagRulesStep.module.css';
 
 interface DayTagRulesStepProps {
   rules: DayTagRule[];
+  skippedDays: number[];
   availableTags: Tag[];
+  weekStartsOn?: 0 | 1;
   onUpdateRule: (dayOfWeek: number, tagIds: string[], priority: 'required' | 'preferred') => void;
   onClear: () => void;
+  onToggleSkipDay: (dayOfWeek: number) => void;
 }
-
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export function DayTagRulesStep({
   rules,
+  skippedDays,
   availableTags,
+  weekStartsOn = 0,
   onUpdateRule,
   onClear,
+  onToggleSkipDay,
 }: DayTagRulesStepProps) {
+  // Get day names and indices in the correct order based on week start
+  const dayNames = getDayNames(weekStartsOn, 'long');
+  const dayIndices = weekStartsOn === 1 ? [1, 2, 3, 4, 5, 6, 0] : [0, 1, 2, 3, 4, 5, 6];
+
   const getRuleForDay = (dayOfWeek: number): DayTagRule | undefined => {
     return rules.find((r) => r.dayOfWeek === dayOfWeek);
   };
@@ -56,6 +65,71 @@ export function DayTagRulesStep({
         </div>
       </div>
 
+      <div className={styles.presets}>
+        <span className={styles.presetsLabel}>Quick presets:</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            // Find "Quick Prep" tag specifically (not "Quick Breakfast" or similar)
+            const quickTag = availableTags.find(
+              (t) =>
+                t.name.toLowerCase() === 'quick prep' ||
+                t.name.toLowerCase() === 'quick' ||
+                t.name.toLowerCase() === 'fast'
+            );
+            if (quickTag) {
+              // Apply to Tuesday only (day 2), merging with existing tags
+              const existingRule = getRuleForDay(2);
+              const existingTagIds = existingRule?.tagIds || [];
+              const mergedTagIds = existingTagIds.includes(quickTag.id)
+                ? existingTagIds
+                : [...existingTagIds, quickTag.id];
+              onUpdateRule(2, mergedTagIds, existingRule?.priority || 'preferred');
+            }
+          }}
+        >
+          Quick Tuesdays
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            // Find both "Slow Cooker" and "Instant Pot" tags
+            const slowCookerTag = availableTags.find(
+              (t) =>
+                t.name.toLowerCase().includes('slow cooker') ||
+                t.name.toLowerCase().includes('crockpot')
+            );
+            const instantPotTag = availableTags.find(
+              (t) => t.name.toLowerCase().includes('instant pot')
+            );
+
+            // Collect all matching tags
+            const tagsToAdd: string[] = [];
+            if (slowCookerTag) tagsToAdd.push(slowCookerTag.id);
+            if (instantPotTag) tagsToAdd.push(instantPotTag.id);
+
+            if (tagsToAdd.length > 0) {
+              // Apply to Sunday and Thursday, merging with existing tags
+              [0, 4].forEach((day) => {
+                const existingRule = getRuleForDay(day);
+                const existingTagIds = existingRule?.tagIds || [];
+                const mergedTagIds = [...existingTagIds];
+                for (const tagId of tagsToAdd) {
+                  if (!mergedTagIds.includes(tagId)) {
+                    mergedTagIds.push(tagId);
+                  }
+                }
+                onUpdateRule(day, mergedTagIds, existingRule?.priority || 'preferred');
+              });
+            }
+          }}
+        >
+          Slow cook Sun/Thu
+        </Button>
+      </div>
+
       {hasAnyRules && (
         <div className={styles.clearButtonWrapper}>
           <Button variant="ghost" size="sm" onClick={onClear} leftIcon={<X size={14} />}>
@@ -65,15 +139,26 @@ export function DayTagRulesStep({
       )}
 
       <div className={styles.dayList}>
-        {DAY_NAMES.map((dayName, dayIndex) => {
+        {dayNames.map((dayName, index) => {
+          const dayIndex = dayIndices[index]; // Map display index to actual day of week (0-6)
           const rule = getRuleForDay(dayIndex);
           const selectedTagIds = rule?.tagIds || [];
+          const isSkipped = skippedDays.includes(dayIndex);
 
           return (
-            <div key={dayIndex} className={styles.dayRow}>
+            <div key={dayIndex} className={`${styles.dayRow} ${isSkipped ? styles.skipped : ''}`}>
               <div className={styles.dayHeader}>
+                <label className={styles.skipLabel}>
+                  <input
+                    type="checkbox"
+                    checked={isSkipped}
+                    onChange={() => onToggleSkipDay(dayIndex)}
+                    className={styles.skipCheckbox}
+                  />
+                  <SkipForward size={14} className={styles.skipIcon} />
+                </label>
                 <span className={styles.dayName}>{dayName}</span>
-                {selectedTagIds.length > 0 && (
+                {selectedTagIds.length > 0 && !isSkipped && (
                   <select
                     value={rule?.priority || 'preferred'}
                     onChange={(e) =>
@@ -85,77 +170,36 @@ export function DayTagRulesStep({
                     <option value="required">Required</option>
                   </select>
                 )}
+                {isSkipped && <span className={styles.skippedLabel}>Skipped</span>}
               </div>
-              <div className={styles.tagList}>
-                {availableTags.map((tag) => {
-                  const isSelected = selectedTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      className={`${styles.tagChip} ${isSelected ? styles.selected : ''}`}
-                      onClick={() => handleTagToggle(dayIndex, tag.id)}
-                      style={
-                        isSelected
-                          ? { backgroundColor: tag.color, borderColor: tag.color }
-                          : { borderColor: tag.color, color: tag.color }
-                      }
-                    >
-                      {tag.name}
-                    </button>
-                  );
-                })}
-                {availableTags.length === 0 && (
-                  <span className={styles.noTags}>No tags available</span>
-                )}
-              </div>
+              {!isSkipped && (
+                <div className={styles.tagList}>
+                  {availableTags.map((tag) => {
+                    const isSelected = selectedTagIds.includes(tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        className={`${styles.tagChip} ${isSelected ? styles.selected : ''}`}
+                        onClick={() => handleTagToggle(dayIndex, tag.id)}
+                        style={
+                          isSelected
+                            ? { backgroundColor: tag.color, borderColor: tag.color }
+                            : { borderColor: tag.color, color: tag.color }
+                        }
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                  {availableTags.length === 0 && (
+                    <span className={styles.noTags}>No tags available</span>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
-      </div>
-
-      <div className={styles.presets}>
-        <span className={styles.presetsLabel}>Quick presets:</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            // Find "Quick" or "Quick Prep" tag
-            const quickTag = availableTags.find(
-              (t) =>
-                t.name.toLowerCase().includes('quick') || t.name.toLowerCase().includes('fast')
-            );
-            if (quickTag) {
-              // Apply to weekdays (Mon-Fri)
-              [1, 2, 3, 4, 5].forEach((day) => {
-                onUpdateRule(day, [quickTag.id], 'preferred');
-              });
-            }
-          }}
-        >
-          Quick weekdays
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            // Find "Slow Cooker" or "Instant Pot" tag
-            const slowTag = availableTags.find(
-              (t) =>
-                t.name.toLowerCase().includes('slow') ||
-                t.name.toLowerCase().includes('instant pot') ||
-                t.name.toLowerCase().includes('crockpot')
-            );
-            if (slowTag) {
-              // Apply to Sunday and Thursday
-              [0, 4].forEach((day) => {
-                onUpdateRule(day, [slowTag.id], 'preferred');
-              });
-            }
-          }}
-        >
-          Slow cook Sun/Thu
-        </Button>
       </div>
 
       {!hasAnyRules && (

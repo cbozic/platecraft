@@ -207,15 +207,35 @@ export function PhotoImportTab() {
 
     // Create thumbnails for potential state persistence
     const thumbnails: string[] = [];
-    for (const file of selectedFiles) {
+    const images: RecipeImage[] = [];
+    const totalImages = selectedFiles.length;
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+
+      // Create thumbnail for state persistence
       try {
         const thumbnail = await compressImageForStorage(file);
         if (thumbnail) thumbnails.push(thumbnail);
       } catch (err) {
         console.warn('Failed to create thumbnail:', err);
       }
+
+      // Create RecipeImage for this file so it's saved with the recipe
+      try {
+        const recipeImage = await imageService.createRecipeImage(
+          file,
+          totalImages > 1 ? `Source photo ${i + 1}` : 'Source photo',
+          i === 0 // First image is primary
+        );
+        images.push(recipeImage);
+      } catch (err) {
+        console.error(`Failed to create source image ${i + 1}:`, err);
+      }
     }
+
     setImageThumbnails(thumbnails);
+    setSourceImages(images);
 
     if (apiAvailable) {
       // Use API vision mode

@@ -23,6 +23,7 @@ export function useCalendar(options: UseCalendarOptions = {}) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<CalendarView>(initialView);
   const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(0);
+  const [defaultServings, setDefaultServings] = useState<number>(4);
   const [mealSlots, setMealSlots] = useState<MealSlot[]>([]);
   const [meals, setMeals] = useState<PlannedMeal[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -36,6 +37,7 @@ export function useCalendar(options: UseCalendarOptions = {}) {
       try {
         const settings = await settingsRepository.get();
         setWeekStartsOn(settings.calendarStartDay);
+        setDefaultServings(settings.defaultServings);
         setMealSlots(settings.mealSlots);
 
         const allRecipes = await recipeRepository.getAll();
@@ -311,6 +313,7 @@ export function useCalendar(options: UseCalendarOptions = {}) {
     currentDate,
     view,
     weekStartsOn,
+    defaultServings,
     mealSlots,
     meals,
     mealsByDate,

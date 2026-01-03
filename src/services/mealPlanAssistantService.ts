@@ -296,14 +296,21 @@ function generateSlotList(
   startDate: Date,
   endDate: Date,
   selectedSlots: string[],
-  mealSlots: MealSlot[]
+  mealSlots: MealSlot[],
+  skippedDays: number[] = []
 ): SlotToFill[] {
   const slots: SlotToFill[] = [];
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
   for (const day of days) {
-    const dateStr = format(day, 'yyyy-MM-dd');
     const dayOfWeek = day.getDay();
+
+    // Skip days that are marked as skipped
+    if (skippedDays.includes(dayOfWeek)) {
+      continue;
+    }
+
+    const dateStr = format(day, 'yyyy-MM-dd');
 
     for (const slotId of selectedSlots) {
       const slot = mealSlots.find((s) => s.id === slotId);
@@ -334,12 +341,45 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 /**
+ * Pick a recipe from candidates using favorites weight
+ */
+function pickRecipeWithFavoritesWeight(
+  candidates: Recipe[],
+  favoritesWeight: number
+): Recipe | null {
+  if (candidates.length === 0) return null;
+
+  const favorites = candidates.filter((r) => r.isFavorite);
+  const nonFavorites = candidates.filter((r) => !r.isFavorite);
+
+  // If no favorites or weight is 0, pick randomly
+  if (favorites.length === 0 || favoritesWeight === 0) {
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  // If weight is 100 or no non-favorites, always pick favorites
+  if (favoritesWeight === 100 || nonFavorites.length === 0) {
+    return favorites[Math.floor(Math.random() * favorites.length)];
+  }
+
+  // Use weight to determine probability
+  const pickFavorite = Math.random() * 100 < favoritesWeight;
+
+  if (pickFavorite) {
+    return favorites[Math.floor(Math.random() * favorites.length)];
+  } else {
+    return nonFavorites[Math.floor(Math.random() * nonFavorites.length)];
+  }
+}
+
+/**
  * Find recipe matching day's tag rules
  */
 function findTagMatchingRecipe(
   recipes: Recipe[],
   dayRules: DayTagRule[],
-  usedRecipes: Set<string>
+  usedRecipes: Set<string>,
+  favoritesWeight: number = 50
 ): Recipe | null {
   // First try required rules
   const requiredRules = dayRules.filter((r) => r.priority === 'required');
@@ -351,7 +391,7 @@ function findTagMatchingRecipe(
         requiredTagIds.some((tagId) => r.tags.includes(tagId))
     );
     if (matching.length > 0) {
-      return matching[Math.floor(Math.random() * matching.length)];
+      return pickRecipeWithFavoritesWeight(matching, favoritesWeight);
     }
   }
 
@@ -365,7 +405,7 @@ function findTagMatchingRecipe(
         preferredTagIds.some((tagId) => r.tags.includes(tagId))
     );
     if (matching.length > 0) {
-      return matching[Math.floor(Math.random() * matching.length)];
+      return pickRecipeWithFavoritesWeight(matching, favoritesWeight);
     }
   }
 
@@ -373,19 +413,98 @@ function findTagMatchingRecipe(
 }
 
 /**
- * Find any unused recipe as fallback
+ * Find any unused recipe as fallback, weighted by favorites preference
  */
-function findFallbackRecipe(recipes: Recipe[], usedRecipes: Set<string>): Recipe | null {
+function findFallbackRecipe(
+  recipes: Recipe[],
+  usedRecipes: Set<string>,
+  favoritesWeight: number = 50
+): Recipe | null {
   const unused = recipes.filter((r) => !usedRecipes.has(r.id));
   if (unused.length === 0) return null;
 
-  // Prefer favorites
   const favorites = unused.filter((r) => r.isFavorite);
-  if (favorites.length > 0) {
+  const nonFavorites = unused.filter((r) => !r.isFavorite);
+
+  // If no favorites or weight is 0, just pick randomly from all
+  if (favorites.length === 0 || favoritesWeight === 0) {
+    return unused[Math.floor(Math.random() * unused.length)];
+  }
+
+  // If weight is 100 or no non-favorites, always pick favorites
+  if (favoritesWeight === 100 || nonFavorites.length === 0) {
     return favorites[Math.floor(Math.random() * favorites.length)];
   }
 
-  return unused[Math.floor(Math.random() * unused.length)];
+  // Use the weight to determine probability of picking a favorite
+  // Weight of 50 = equal chance, 100 = always favorites, 0 = never favorites
+  const pickFavorite = Math.random() * 100 < favoritesWeight;
+
+  if (pickFavorite) {
+    return favorites[Math.floor(Math.random() * favorites.length)];
+  } else {
+    return nonFavorites[Math.floor(Math.random() * nonFavorites.length)];
+  }
+}
+
+/**
+ * Track when each recipe was last used (by slot index) for reuse spacing
+ */
+interface RecipeUsageTracker {
+  lastUsedAtSlot: Map<string, number>;
+  currentSlotIndex: number;
+}
+
+/**
+ * Find a recipe for reuse, maximizing time since last use
+ */
+function findRecipeForReuse(
+  recipes: Recipe[],
+  usageTracker: RecipeUsageTracker,
+  dayRules: DayTagRule[],
+  dayOfWeek: number,
+  favoritesWeight: number = 50
+): Recipe | null {
+  if (recipes.length === 0) return null;
+
+  // Get rules for this day
+  const rulesForDay = dayRules.filter((r) => r.dayOfWeek === dayOfWeek);
+  const preferredTagIds = rulesForDay.flatMap((r) => r.tagIds);
+
+  // Calculate the favorites bonus based on weight (0-10 scale based on 0-100 weight)
+  const favoritesBonus = (favoritesWeight / 100) * 10;
+
+  // Score each recipe by how long ago it was used and if it matches day rules
+  const scoredRecipes = recipes.map((recipe) => {
+    const lastUsed = usageTracker.lastUsedAtSlot.get(recipe.id);
+    // If never used, give maximum distance
+    const distance = lastUsed === undefined
+      ? usageTracker.currentSlotIndex + recipes.length
+      : usageTracker.currentSlotIndex - lastUsed;
+
+    // Bonus for matching day rules
+    const matchesDayRules = preferredTagIds.length > 0 &&
+      preferredTagIds.some((tagId) => recipe.tags.includes(tagId));
+
+    // Bonus for favorites (scaled by favoritesWeight)
+    const isFavorite = recipe.isFavorite;
+
+    return {
+      recipe,
+      distance,
+      matchesDayRules,
+      isFavorite,
+      // Combined score: distance is primary, with weighted bonuses
+      score: distance * 10 + (matchesDayRules ? 5 : 0) + (isFavorite ? favoritesBonus : 0),
+    };
+  });
+
+  // Sort by score descending (highest = longest time since last use + bonuses)
+  scoredRecipes.sort((a, b) => b.score - a.score);
+
+  // Add some randomness among top candidates to avoid always picking the same recipe
+  const topCandidates = scoredRecipes.slice(0, Math.min(3, scoredRecipes.length));
+  return topCandidates[Math.floor(Math.random() * topCandidates.length)].recipe;
 }
 
 /**
@@ -425,8 +544,8 @@ export async function generateMealPlan(
     };
   }
 
-  // Generate slots to fill
-  const allSlots = generateSlotList(config.startDate, config.endDate, config.selectedSlots, mealSlots);
+  // Generate slots to fill (filtering out skipped days)
+  const allSlots = generateSlotList(config.startDate, config.endDate, config.selectedSlots, mealSlots, config.skippedDays);
   const slotsToFill = [...allSlots];
 
   // PHASE 1: Find recipes that use ingredients on hand
@@ -442,11 +561,11 @@ export async function generateMealPlan(
 
       const dayRules = config.dayTagRules.filter((r) => r.dayOfWeek === slot.dayOfWeek);
 
-      // Find best recipe that:
-      // a) Uses available ingredients
-      // b) Hasn't been used yet
-      // c) Matches day's tag rules if possible
-      let bestMatch: RecipeMatchScore | null = null;
+      // Find all valid recipes that:
+      // a) Use available ingredients
+      // b) Haven't been used yet
+      // c) Match day's tag rules if possible
+      const validCandidates: { score: RecipeMatchScore; recipe: Recipe; matchesDayTags: boolean }[] = [];
 
       for (const score of recipeScores) {
         if (usedRecipes.has(score.recipeId)) continue;
@@ -459,27 +578,37 @@ export async function generateMealPlan(
 
         if (!hasIngredients) continue;
 
-        // Prefer recipes matching day's tag rules
-        if (dayRules.length > 0) {
-          const recipe = allRecipes.find((r) => r.id === score.recipeId);
-          if (recipe) {
-            const matchesDayTags = dayRules.some((rule) =>
-              rule.tagIds.some((tagId) => recipe.tags.includes(tagId))
-            );
-            if (matchesDayTags) {
-              bestMatch = score;
-              break;
-            }
-          }
-        }
+        const recipe = allRecipes.find((r) => r.id === score.recipeId);
+        if (!recipe) continue;
 
-        if (!bestMatch) {
-          bestMatch = score;
+        const matchesDayTags = dayRules.length > 0 && dayRules.some((rule) =>
+          rule.tagIds.some((tagId) => recipe.tags.includes(tagId))
+        );
+
+        validCandidates.push({ score, recipe, matchesDayTags });
+      }
+
+      // Select from candidates: prefer day-tag matches, then use favorites weight
+      let bestMatch: RecipeMatchScore | null = null;
+      let selectedRecipe: Recipe | null = null;
+
+      if (validCandidates.length > 0) {
+        // First priority: recipes matching day's tag rules
+        const dayTagMatches = validCandidates.filter((c) => c.matchesDayTags);
+        if (dayTagMatches.length > 0) {
+          const recipes = dayTagMatches.map((c) => c.recipe);
+          selectedRecipe = pickRecipeWithFavoritesWeight(recipes, config.favoritesWeight);
+          bestMatch = dayTagMatches.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
+        } else {
+          // No day-tag matches, pick from all valid candidates using favorites weight
+          const recipes = validCandidates.map((c) => c.recipe);
+          selectedRecipe = pickRecipeWithFavoritesWeight(recipes, config.favoritesWeight);
+          bestMatch = validCandidates.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
         }
       }
 
-      if (bestMatch) {
-        const recipe = allRecipes.find((r) => r.id === bestMatch!.recipeId)!;
+      if (bestMatch && selectedRecipe) {
+        const recipe = selectedRecipe;
 
         // Deduct ingredients
         deductIngredients(ingredientPool, bestMatch.requiredQuantities);
@@ -515,7 +644,7 @@ export async function generateMealPlan(
     const dayRules = config.dayTagRules.filter((r) => r.dayOfWeek === slot.dayOfWeek);
 
     if (dayRules.length > 0) {
-      const recipe = findTagMatchingRecipe(allRecipes, dayRules, usedRecipes);
+      const recipe = findTagMatchingRecipe(allRecipes, dayRules, usedRecipes, config.favoritesWeight);
 
       if (recipe) {
         usedRecipes.add(recipe.id);
@@ -547,12 +676,31 @@ export async function generateMealPlan(
     }
   }
 
-  // PHASE 3: Fill remaining slots with any available recipe
+  // PHASE 3: Fill remaining slots with any available recipe (or reuse if needed)
+  // Initialize usage tracker for recipe reuse spacing
+  const usageTracker: RecipeUsageTracker = {
+    lastUsedAtSlot: new Map(),
+    currentSlotIndex: proposedMeals.length,
+  };
+
+  // Record already used recipes in the tracker
+  proposedMeals.forEach((meal, index) => {
+    usageTracker.lastUsedAtSlot.set(meal.recipeId, index);
+  });
+
   for (const slot of [...slotsToFill]) {
-    const recipe = findFallbackRecipe(allRecipes, usedRecipes);
+    // First try to find an unused recipe (using favorites weight)
+    let recipe = findFallbackRecipe(allRecipes, usedRecipes, config.favoritesWeight);
+
+    // If no unused recipes, find a recipe to reuse with maximum spacing
+    if (!recipe && allRecipes.length > 0) {
+      recipe = findRecipeForReuse(allRecipes, usageTracker, config.dayTagRules, slot.dayOfWeek, config.favoritesWeight);
+    }
 
     if (recipe) {
       usedRecipes.add(recipe.id);
+      usageTracker.lastUsedAtSlot.set(recipe.id, usageTracker.currentSlotIndex);
+      usageTracker.currentSlotIndex++;
 
       // Remove slot from remaining
       const slotIndex = slotsToFill.findIndex(
@@ -577,9 +725,11 @@ export async function generateMealPlan(
     }
   }
 
-  // Generate warnings
+  // Generate warnings - now only if we have no recipes at all
   if (slotsToFill.length > 0) {
-    warnings.push(`Not enough unique recipes to fill all ${allSlots.length} slots. ${slotsToFill.length} slots remain empty.`);
+    warnings.push(`Could not fill ${slotsToFill.length} slots. Please add more recipes to your collection.`);
+  } else if (allSlots.length > allRecipes.length) {
+    warnings.push(`Some recipes are used multiple times because there are more slots (${allSlots.length}) than available recipes (${allRecipes.length}).`);
   }
 
   // Calculate ingredient usage

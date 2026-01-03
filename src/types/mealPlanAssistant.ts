@@ -35,10 +35,12 @@ export interface MealSlotSelection {
 export interface MealPlanConfig {
   ingredientsOnHand: IngredientOnHand[];
   dayTagRules: DayTagRule[];
+  skippedDays: number[]; // Days of week to skip (0 = Sunday, 6 = Saturday)
   startDate: Date;
   endDate: Date;
   selectedSlots: string[]; // Slot IDs to fill
   defaultServings: number;
+  favoritesWeight: number; // 0-100: percentage weight for preferring favorite recipes
 }
 
 /**

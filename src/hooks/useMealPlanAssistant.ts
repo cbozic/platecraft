@@ -42,11 +42,13 @@ export interface UseMealPlanAssistantReturn {
   // Day rules actions
   updateDayRule: (dayOfWeek: number, tagIds: string[], priority: 'required' | 'preferred') => void;
   clearDayRules: () => void;
+  toggleSkipDay: (dayOfWeek: number) => void;
 
   // Date/slot actions
   setDateRange: (startDate: Date, endDate: Date) => void;
   toggleSlot: (slotId: string) => void;
   setServings: (servings: number) => void;
+  setFavoritesWeight: (weight: number) => void;
 
   // Generation
   generatePlan: () => Promise<void>;
@@ -71,10 +73,12 @@ function getInitialConfig(defaultServings: number, mealSlots: MealSlot[]): MealP
   return {
     ingredientsOnHand: [],
     dayTagRules: [],
+    skippedDays: [],
     startDate: startOfWeek(today, { weekStartsOn: 0 }),
     endDate: endOfWeek(today, { weekStartsOn: 0 }),
     selectedSlots: mealSlots.filter((s) => s.id === 'dinner' || s.id === 'lunch').map((s) => s.id),
     defaultServings,
+    favoritesWeight: 50, // Default to balanced (50% favorites preference)
   };
 }
 
@@ -190,6 +194,15 @@ export function useMealPlanAssistant({
     setConfig((prev) => ({ ...prev, dayTagRules: [] }));
   }, []);
 
+  const toggleSkipDay = useCallback((dayOfWeek: number) => {
+    setConfig((prev) => ({
+      ...prev,
+      skippedDays: prev.skippedDays.includes(dayOfWeek)
+        ? prev.skippedDays.filter((d) => d !== dayOfWeek)
+        : [...prev.skippedDays, dayOfWeek],
+    }));
+  }, []);
+
   // Date/slot actions
   const setDateRange = useCallback((startDate: Date, endDate: Date) => {
     setConfig((prev) => ({ ...prev, startDate, endDate }));
@@ -209,6 +222,10 @@ export function useMealPlanAssistant({
 
   const setServings = useCallback((servings: number) => {
     setConfig((prev) => ({ ...prev, defaultServings: servings }));
+  }, []);
+
+  const setFavoritesWeight = useCallback((weight: number) => {
+    setConfig((prev) => ({ ...prev, favoritesWeight: Math.max(0, Math.min(100, weight)) }));
   }, []);
 
   // Generation
@@ -366,9 +383,11 @@ export function useMealPlanAssistant({
     removeIngredient,
     updateDayRule,
     clearDayRules,
+    toggleSkipDay,
     setDateRange,
     toggleSlot,
     setServings,
+    setFavoritesWeight,
     generatePlan,
     swapMeal,
     rejectMeal,
