@@ -304,37 +304,37 @@ export function RecipeDetailPage() {
                   <div className={styles.nutritionCalories}>
                     <span className={styles.nutritionCaloriesLabel}>Calories</span>
                     <span className={styles.nutritionCaloriesValue}>
-                      {Math.round(recipe.nutrition.calories * scaleFactor / recipe.servings)}
+                      {Math.round(recipe.nutrition.calories)}
                     </span>
                   </div>
                   <div className={styles.nutritionRow}>
                     <span className={`${styles.nutritionLabel} ${styles.bold}`}>Total Fat</span>
                     <span className={styles.nutritionValue}>
-                      {Math.round(recipe.nutrition.fat * scaleFactor / recipe.servings * 10) / 10}g
+                      {Math.round(recipe.nutrition.fat * 10) / 10}g
                     </span>
                   </div>
                   <div className={styles.nutritionRow}>
                     <span className={`${styles.nutritionLabel} ${styles.bold}`}>Sodium</span>
                     <span className={styles.nutritionValue}>
-                      {Math.round(recipe.nutrition.sodium * scaleFactor / recipe.servings)}mg
+                      {Math.round(recipe.nutrition.sodium)}mg
                     </span>
                   </div>
                   <div className={styles.nutritionRow}>
                     <span className={`${styles.nutritionLabel} ${styles.bold}`}>Total Carbohydrate</span>
                     <span className={styles.nutritionValue}>
-                      {Math.round(recipe.nutrition.carbohydrates * scaleFactor / recipe.servings * 10) / 10}g
+                      {Math.round(recipe.nutrition.carbohydrates * 10) / 10}g
                     </span>
                   </div>
                   <div className={styles.nutritionRow}>
                     <span className={styles.nutritionLabel}>Dietary Fiber</span>
                     <span className={styles.nutritionValue}>
-                      {Math.round(recipe.nutrition.fiber * scaleFactor / recipe.servings * 10) / 10}g
+                      {Math.round(recipe.nutrition.fiber * 10) / 10}g
                     </span>
                   </div>
                   <div className={styles.nutritionRow}>
                     <span className={`${styles.nutritionLabel} ${styles.bold}`}>Protein</span>
                     <span className={styles.nutritionValue}>
-                      {Math.round(recipe.nutrition.protein * scaleFactor / recipe.servings * 10) / 10}g
+                      {Math.round(recipe.nutrition.protein * 10) / 10}g
                     </span>
                   </div>
                   <p className={styles.nutritionDv}>
