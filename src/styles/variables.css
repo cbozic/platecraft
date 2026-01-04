@@ -89,7 +89,7 @@
   --color-secondary: #94a3b8;
   --color-secondary-hover: #cbd5e1;
 
-  --color-success: #22c55e;
+  --color-success: #4ade80;
   --color-success-light: #14532d;
 
   --color-warning: #f59e0b;
@@ -112,9 +112,73 @@
   --color-border-focus: #3b82f6;
 }
 
+/* Dark Fuchsia Theme */
+[data-theme="dark-fuchsia"] {
+  --color-primary: #d946ef;
+  --color-primary-hover: #e879f9;
+  --color-primary-light: #4a1d5c;
+
+  --color-secondary: #a78bfa;
+  --color-secondary-hover: #c4b5fd;
+
+  --color-success: #4ade80;
+  --color-success-light: #14532d;
+
+  --color-warning: #f59e0b;
+  --color-warning-light: #713f12;
+
+  --color-error: #ef4444;
+  --color-error-light: #7f1d1d;
+
+  --color-background: #1a0a1f;
+  --color-background-secondary: #2d1535;
+  --color-surface: #2d1535;
+  --color-surface-hover: #3d2045;
+
+  --color-text-primary: #faf5ff;
+  --color-text-secondary: #e9d5ff;
+  --color-text-muted: #d8b4fe;
+  --color-text-inverse: #1a0a1f;
+
+  --color-border: #4c1d6d;
+  --color-border-focus: #d946ef;
+}
+
+/* Light Forest Theme */
+[data-theme="light-forest"] {
+  --color-primary: #166534;
+  --color-primary-hover: #14532d;
+  --color-primary-light: #dcfce7;
+
+  --color-secondary: #4b5563;
+  --color-secondary-hover: #374151;
+
+  --color-success: #15803d;
+  --color-success-light: #bbf7d0;
+
+  --color-warning: #ca8a04;
+  --color-warning-light: #fef9c3;
+
+  --color-error: #dc2626;
+  --color-error-light: #fecaca;
+
+  --color-background: #f0fdf4;
+  --color-background-secondary: #ecfdf5;
+  --color-surface: #ffffff;
+  --color-surface-hover: #dcfce7;
+
+  --color-text-primary: #052e16;
+  --color-text-secondary: #14532d;
+  --color-text-muted: #166534;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #86efac;
+  --color-border-focus: #166534;
+}
+
 /* System theme preference */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme="light"]):not([data-theme="light-forest"]):not([data-theme="dark"]):not([data-theme="dark-fuchsia"]) {
     --color-primary: #3b82f6;
     --color-primary-hover: #60a5fa;
     --color-primary-light: #1e3a5f;
@@ -122,7 +186,7 @@
     --color-secondary: #94a3b8;
     --color-secondary-hover: #cbd5e1;
 
-    --color-success: #22c55e;
+    --color-success: #4ade80;
     --color-success-light: #14532d;
 
     --color-warning: #f59e0b;

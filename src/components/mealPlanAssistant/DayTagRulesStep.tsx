@@ -182,11 +182,6 @@ export function DayTagRulesStep({
                         type="button"
                         className={`${styles.tagChip} ${isSelected ? styles.selected : ''}`}
                         onClick={() => handleTagToggle(dayIndex, tag.id)}
-                        style={
-                          isSelected
-                            ? { backgroundColor: tag.color, borderColor: tag.color }
-                            : { borderColor: tag.color, color: tag.color }
-                        }
                       >
                         {tag.name}
                       </button>

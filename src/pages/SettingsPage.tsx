@@ -394,7 +394,9 @@ export function SettingsPage() {
                 >
                   <option value="system">System</option>
                   <option value="light">Light</option>
+                  <option value="light-forest">Light Forest</option>
                   <option value="dark">Dark</option>
+                  <option value="dark-fuchsia">Dark Fuchsia</option>
                 </select>
               </div>
             </div>

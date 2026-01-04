@@ -141,7 +141,7 @@
   border: 1px solid var(--color-success, #22c55e);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
-  color: var(--color-success-dark, #166534);
+  color: var(--color-success);
 }
 
 .restoredBanner svg {
