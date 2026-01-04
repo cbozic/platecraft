@@ -30,8 +30,3 @@
   color: var(--color-text-inverse);
 }
 
-@media (max-width: 767px) {
-  .toggle {
-    display: none;
-  }
-}

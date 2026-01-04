@@ -143,8 +143,3 @@
   min-width: auto;
 }
 
-@media (max-width: 767px) {
-  .tableWrapper {
-    display: none;
-  }
-}
