@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff, Lock } from 'lucide-react';
+import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff, Lock, Share2 } from 'lucide-react';
 import { Button, Card, CardHeader, CardBody, Modal, ModalFooter, Input } from '@/components/ui';
 import { TagManager, CalendarSettings, StapleIngredientsManager } from '@/components/settings';
 import { settingsRepository } from '@/db';
@@ -50,6 +50,7 @@ export function SettingsPage() {
   const [exportPasswordConfirm, setExportPasswordConfirm] = useState('');
   const [showExportPassword, setShowExportPassword] = useState(false);
   const [exportPasswordError, setExportPasswordError] = useState<string | null>(null);
+  const [canShare, setCanShare] = useState(false);
 
   // Import decryption state
   const [importPasswordModalOpen, setImportPasswordModalOpen] = useState(false);
@@ -83,6 +84,11 @@ export function SettingsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Check if Web Share API with files is available (iOS, some Android)
+  useEffect(() => {
+    setCanShare(dataService.canShareFiles());
+  }, []);
 
   const handleThemeChange = async (theme: Theme) => {
     if (!settings) return;
@@ -155,7 +161,7 @@ export function SettingsPage() {
     setExportPasswordModalOpen(true);
   };
 
-  const handleExportWithPassword = async () => {
+  const handleExportWithPassword = async (useShare: boolean = false) => {
     // Validate passwords match
     if (exportPassword !== exportPasswordConfirm) {
       setExportPasswordError('Passwords do not match');
@@ -171,10 +177,23 @@ export function SettingsPage() {
     setExportPasswordError(null);
 
     try {
-      await dataService.downloadEncryptedExport(exportPassword);
-      setExportPasswordModalOpen(false);
-      setExportPassword('');
-      setExportPasswordConfirm('');
+      if (useShare && canShare) {
+        // Try Web Share API first (iOS Files, AirDrop, iCloud, etc.)
+        const shared = await dataService.shareExport(exportPassword);
+        if (shared) {
+          setExportPasswordModalOpen(false);
+          setExportPassword('');
+          setExportPasswordConfirm('');
+          return;
+        }
+        // If share was cancelled or failed, don't fall back automatically
+      } else {
+        // Use traditional download
+        await dataService.downloadEncryptedExport(exportPassword);
+        setExportPasswordModalOpen(false);
+        setExportPassword('');
+        setExportPasswordConfirm('');
+      }
     } catch (error) {
       console.error('Export failed:', error);
       setExportPasswordError('Failed to export data. Please try again.');
@@ -900,11 +919,22 @@ export function SettingsPage() {
             <Button variant="outline" onClick={handleExportClose}>
               Cancel
             </Button>
+            {canShare && (
+              <Button
+                variant="outline"
+                leftIcon={<Share2 size={16} />}
+                onClick={() => handleExportWithPassword(true)}
+                disabled={isExporting || !exportPassword || !exportPasswordConfirm}
+              >
+                {isExporting ? 'Sharing...' : 'Share'}
+              </Button>
+            )}
             <Button
-              onClick={handleExportWithPassword}
+              leftIcon={<Download size={16} />}
+              onClick={() => handleExportWithPassword(false)}
               disabled={isExporting || !exportPassword || !exportPasswordConfirm}
             >
-              {isExporting ? 'Exporting...' : 'Export'}
+              {isExporting ? 'Saving...' : 'Save'}
             </Button>
           </ModalFooter>
         </div>

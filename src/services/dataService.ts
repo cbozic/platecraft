@@ -25,6 +25,54 @@ export interface ImportResult {
 
 export const dataService = {
   /**
+   * Check if Web Share API with files is supported (iOS 15+, some Android)
+   */
+  canShareFiles(): boolean {
+    return 'share' in navigator && 'canShare' in navigator;
+  },
+
+  /**
+   * Share export via Web Share API (iOS Files, AirDrop, iCloud, etc.)
+   * Returns true if shared successfully, false if share not supported
+   */
+  async shareExport(password?: string): Promise<boolean> {
+    const data = await this.exportAllData();
+    const json = JSON.stringify(data, null, 2);
+
+    let content: string;
+    if (password) {
+      const encrypted = await cryptoService.encryptExport(json, password);
+      content = JSON.stringify(encrypted, null, 2);
+    } else {
+      content = json;
+    }
+
+    const date = new Date().toISOString().split('T')[0];
+    const file = new File([content], `platecraft-backup-${date}.json`, {
+      type: 'application/json',
+    });
+
+    // Check if the browser can share this file
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        // Track the backup date for reminder purposes
+        await settingsRepository.setLastBackupDate(new Date());
+        return true;
+      } catch (err) {
+        // User cancelled or share failed - check if it was a user cancel
+        if (err instanceof Error && err.name === 'AbortError') {
+          // User cancelled, don't treat as error
+          return false;
+        }
+        throw err;
+      }
+    }
+
+    return false; // Share not supported, caller should fall back to download
+  },
+
+  /**
    * Export all application data as a JSON object
    * Decrypts sensitive fields so export contains plaintext
    */
