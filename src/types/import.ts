@@ -103,6 +103,13 @@ export const RECIPE_VISION_PROMPT = `Look at this image of a recipe and extract 
 The image may contain handwritten text, printed text, or a combination.
 Read the recipe carefully and return ONLY valid JSON with no markdown code blocks or explanation.
 
+IMPORTANT: Pay special attention to distinguishing handwritten text from printed text.
+If the recipe is primarily printed text with handwritten annotations, modifications, or notes:
+- Extract the printed recipe content for the main fields (title, ingredients, instructions)
+- Capture ALL handwritten text separately and include it in the "notes" field
+- Prefix handwritten content in notes with "Handwritten notes:" followed by the handwritten text
+- Handwritten additions might include recipe modifications, tips, corrections, ratings, dates, or personal comments
+
 Return JSON in this exact format:
 {
   "title": "Recipe Name",
@@ -114,7 +121,7 @@ Return JSON in this exact format:
     {"name": "ingredient", "quantity": 2, "unit": "cups", "notes": "diced"}
   ],
   "instructions": "Step by step instructions...",
-  "notes": "Any additional notes or tips"
+  "notes": "Any additional notes or tips. Handwritten notes: [any handwritten text found on the recipe]"
 }
 
 For ingredients:
