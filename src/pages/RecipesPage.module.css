@@ -35,6 +35,12 @@
   max-width: 400px;
 }
 
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
 .filterWrapper {
   position: relative;
 }

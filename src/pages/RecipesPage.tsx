@@ -2,10 +2,20 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { Plus, Search, Filter, Upload, Heart } from 'lucide-react';
 import { Button, Input, Card } from '@/components/ui';
-import { RecipeFilterPanel, getActiveFilterCount, DEFAULT_FILTERS, ShareButton } from '@/components/recipe';
-import type { RecipeFilters } from '@/components/recipe';
-import { recipeRepository } from '@/db';
+import {
+  RecipeFilterPanel,
+  getActiveFilterCount,
+  DEFAULT_FILTERS,
+  ShareButton,
+  ViewToggle,
+  RecipeTableView,
+  BulkActionsBar,
+  BulkTagModal,
+} from '@/components/recipe';
+import type { RecipeFilters, SortConfig } from '@/components/recipe';
+import { recipeRepository, tagRepository } from '@/db';
 import type { Recipe } from '@/types';
+import type { Tag } from '@/types/tags';
 import styles from './RecipesPage.module.css';
 
 // Parse filters from URL search params
@@ -66,6 +76,14 @@ export function RecipesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
+  // Table view state
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [selectedRecipeIds, setSelectedRecipeIds] = useState<Set<string>>(new Set());
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ column: 'createdAt', direction: 'desc' });
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
+  const [bulkTagMode, setBulkTagMode] = useState<'add' | 'remove'>('add');
+
   // Parse filters from URL
   const filters = useMemo(() => parseFiltersFromParams(searchParams), [searchParams]);
 
@@ -78,10 +96,14 @@ export function RecipesPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const recipesData = await recipeRepository.getAll();
+        const [recipesData, tagsData] = await Promise.all([
+          recipeRepository.getAll(),
+          tagRepository.getVisibleTags(),
+        ]);
         setRecipes(recipesData);
+        setAllTags(tagsData);
       } catch (error) {
-        console.error('Failed to load recipes:', error);
+        console.error('Failed to load data:', error);
       } finally {
         setIsLoading(false);
       }
@@ -158,14 +180,108 @@ export function RecipesPage() {
 
   const activeFilterCount = getActiveFilterCount(filters);
 
-  const handleToggleFavorite = async (recipeId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  // Sort recipes for table view
+  const sortedRecipes = useMemo(() => {
+    if (viewMode !== 'table') return filteredRecipes;
+
+    return [...filteredRecipes].sort((a, b) => {
+      const dir = sortConfig.direction === 'asc' ? 1 : -1;
+      switch (sortConfig.column) {
+        case 'title':
+          return dir * a.title.localeCompare(b.title);
+        case 'prepTime':
+          return dir * ((a.prepTimeMinutes ?? 0) - (b.prepTimeMinutes ?? 0));
+        case 'cookTime':
+          return dir * ((a.cookTimeMinutes ?? 0) - (b.cookTimeMinutes ?? 0));
+        case 'servings':
+          return dir * (a.servings - b.servings);
+        case 'createdAt':
+          return dir * (a.createdAt.getTime() - b.createdAt.getTime());
+        default:
+          return 0;
+      }
+    });
+  }, [filteredRecipes, sortConfig, viewMode]);
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedRecipeIds(new Set());
+  }, [filters, searchQuery]);
+
+  const handleToggleFavorite = async (recipeId: string, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     await recipeRepository.toggleFavorite(recipeId);
     setRecipes((prev) =>
       prev.map((r) => (r.id === recipeId ? { ...r, isFavorite: !r.isFavorite } : r))
     );
   };
+
+  const handleDeleteRecipe = async (recipeId: string) => {
+    if (!window.confirm('Are you sure you want to delete this recipe?')) return;
+    await recipeRepository.delete(recipeId);
+    setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
+    setSelectedRecipeIds((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(recipeId);
+      return newSet;
+    });
+  };
+
+  const handleSingleRecipeTagsChange = async (recipeId: string, tagIds: string[]) => {
+    await recipeRepository.update(recipeId, { tags: tagIds });
+    setRecipes((prev) =>
+      prev.map((r) => (r.id === recipeId ? { ...r, tags: tagIds, updatedAt: new Date() } : r))
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRecipeIds.size === 0) return;
+    const count = selectedRecipeIds.size;
+    if (!window.confirm(`Are you sure you want to delete ${count} recipe${count !== 1 ? 's' : ''}?`)) return;
+
+    for (const id of selectedRecipeIds) {
+      await recipeRepository.delete(id);
+    }
+    setRecipes((prev) => prev.filter((r) => !selectedRecipeIds.has(r.id)));
+    setSelectedRecipeIds(new Set());
+  };
+
+  const handleBulkTagsChange = async (tagIds: string[]) => {
+    if (tagIds.length === 0) return;
+
+    const updates = [...selectedRecipeIds].map(async (recipeId) => {
+      const recipe = recipes.find((r) => r.id === recipeId);
+      if (!recipe) return;
+
+      const newTags =
+        bulkTagMode === 'add'
+          ? [...new Set([...recipe.tags, ...tagIds])]
+          : recipe.tags.filter((t) => !tagIds.includes(t));
+
+      await recipeRepository.update(recipeId, { tags: newTags });
+      return { recipeId, newTags };
+    });
+
+    const results = await Promise.all(updates);
+
+    setRecipes((prev) =>
+      prev.map((r) => {
+        const update = results.find((u) => u?.recipeId === r.id);
+        return update ? { ...r, tags: update.newTags, updatedAt: new Date() } : r;
+      })
+    );
+    setSelectedRecipeIds(new Set());
+  };
+
+  const openBulkTagModal = (mode: 'add' | 'remove') => {
+    setBulkTagMode(mode);
+    setBulkTagModalOpen(true);
+  };
+
+  const selectedRecipes = useMemo(() => {
+    return recipes.filter((r) => selectedRecipeIds.has(r.id));
+  }, [recipes, selectedRecipeIds]);
 
   if (isLoading) {
     return (
@@ -200,20 +316,23 @@ export function RecipesPage() {
             fullWidth
           />
         </div>
-        <div className={styles.filterWrapper}>
-          <Button
-            variant={activeFilterCount > 0 ? 'primary' : 'outline'}
-            leftIcon={<Filter size={18} />}
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-          >
-            Filter{activeFilterCount > 0 && ` (${activeFilterCount})`}
-          </Button>
-          <RecipeFilterPanel
-            filters={filters}
-            onChange={handleFiltersChange}
-            isOpen={isFilterOpen}
-            onClose={() => setIsFilterOpen(false)}
-          />
+        <div className={styles.toolbarActions}>
+          <div className={styles.filterWrapper}>
+            <Button
+              variant={activeFilterCount > 0 ? 'primary' : 'outline'}
+              leftIcon={<Filter size={18} />}
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+            >
+              Filter{activeFilterCount > 0 && ` (${activeFilterCount})`}
+            </Button>
+            <RecipeFilterPanel
+              filters={filters}
+              onChange={handleFiltersChange}
+              isOpen={isFilterOpen}
+              onClose={() => setIsFilterOpen(false)}
+            />
+          </div>
+          <ViewToggle view={viewMode} onChange={setViewMode} />
         </div>
       </div>
 
@@ -244,7 +363,7 @@ export function RecipesPage() {
             </>
           )}
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className={styles.grid}>
           {filteredRecipes.map((recipe) => (
             <Link
@@ -311,7 +430,36 @@ export function RecipesPage() {
             </Link>
           ))}
         </div>
+      ) : (
+        <RecipeTableView
+          recipes={sortedRecipes}
+          tags={allTags}
+          selectedIds={selectedRecipeIds}
+          onSelectionChange={setSelectedRecipeIds}
+          sortConfig={sortConfig}
+          onSortChange={setSortConfig}
+          onToggleFavorite={handleToggleFavorite}
+          onDelete={handleDeleteRecipe}
+          onTagsChange={handleSingleRecipeTagsChange}
+        />
       )}
+
+      <BulkActionsBar
+        selectedCount={selectedRecipeIds.size}
+        onAddTags={() => openBulkTagModal('add')}
+        onRemoveTags={() => openBulkTagModal('remove')}
+        onDelete={handleBulkDelete}
+        onClearSelection={() => setSelectedRecipeIds(new Set())}
+      />
+
+      <BulkTagModal
+        isOpen={bulkTagModalOpen}
+        onClose={() => setBulkTagModalOpen(false)}
+        mode={bulkTagMode}
+        selectedRecipes={selectedRecipes}
+        allTags={allTags}
+        onConfirm={handleBulkTagsChange}
+      />
     </div>
   );
 }
