@@ -72,9 +72,8 @@ async function searchForRecipes(
     });
 
     try {
-      // Use DuckDuckGo search for Epicurious (direct scraping doesn't work due to CORS)
-      // For other sites, use direct category pages
-      const useDuckDuckGo = site === 'epicurious';
+      // Use DuckDuckGo search for sites where direct scraping doesn't work
+      const useDuckDuckGo = site === 'epicurious' || site === 'seriouseats' || site === 'bonappetit' || site === 'nytimes';
       const searchUrl = useDuckDuckGo
         ? buildDuckDuckGoSearchUrl(site, protein, config.lowFat)
         : buildCategoryUrl(site, protein, config.lowFat);
@@ -228,9 +227,17 @@ async function processRecipe(
   try {
     // Update status
     item.status = 'fetching';
+    console.log(`[Bulk Import] Fetching recipe: ${item.searchResult.url}`);
 
     // Fetch recipe page
     const scrapeResult = await urlScraperService.scrapeRecipeUrl(item.searchResult.url);
+    console.log(`[Bulk Import] Scrape result for ${item.searchResult.url}:`, {
+      success: scrapeResult.success,
+      usedSchemaOrg: scrapeResult.usedSchemaOrg,
+      hasRecipe: !!scrapeResult.recipe,
+      hasRawText: !!scrapeResult.rawText,
+      error: scrapeResult.error,
+    });
 
     if (!scrapeResult.success) {
       return {
@@ -269,6 +276,7 @@ async function processRecipe(
     // For bulk import, we'll skip recipes that don't have schema.org data
     // to avoid requiring API keys and to speed up the process
     if (scrapeResult.rawText) {
+      console.log(`[Bulk Import] No schema.org data for ${item.searchResult.url}, raw text length: ${scrapeResult.rawText.length}`);
       return {
         ...item,
         status: 'failed',
@@ -276,12 +284,14 @@ async function processRecipe(
       };
     }
 
+    console.log(`[Bulk Import] No data found for ${item.searchResult.url}`);
     return {
       ...item,
       status: 'failed',
       error: 'No recipe data found',
     };
   } catch (error) {
+    console.error(`[Bulk Import] Error processing ${item.searchResult.url}:`, error);
     return {
       ...item,
       status: 'failed',
@@ -345,6 +355,9 @@ export function getSiteDisplayName(site: RecipeSite): string {
     allrecipes: 'AllRecipes',
     foodnetwork: 'Food Network',
     epicurious: 'Epicurious',
+    seriouseats: 'Serious Eats',
+    bonappetit: 'Bon Appetit',
+    nytimes: 'NY Times Cooking',
   };
   return names[site];
 }

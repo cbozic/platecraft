@@ -15,6 +15,9 @@ export function buildDuckDuckGoSearchUrl(site: RecipeSite, protein: ProteinCateg
     allrecipes: 'allrecipes.com',
     foodnetwork: 'foodnetwork.com',
     epicurious: 'epicurious.com',
+    seriouseats: 'seriouseats.com',
+    bonappetit: 'bonappetit.com',
+    nytimes: 'cooking.nytimes.com',
   };
 
   const siteDomain = siteMap[site];
@@ -82,6 +85,9 @@ export function parseDuckDuckGoResults(
       allrecipes: /https?:\/\/(?:www\.)?allrecipes\.com\/recipe\/(\d+)\/([a-z0-9-]+)/gi,
       foodnetwork: /https?:\/\/(?:www\.)?foodnetwork\.com\/recipes\/([^\/\s"]+)\/([a-z0-9-]+)/gi,
       epicurious: /https?:\/\/(?:www\.)?epicurious\.com\/recipes\/(?:food\/views\/)?([a-z0-9-]+)/gi,
+      seriouseats: /https?:\/\/(?:www\.)?seriouseats\.com\/([a-z0-9]+-[a-z0-9-]+)/gi,
+      bonappetit: /https?:\/\/(?:www\.)?bonappetit\.com\/recipe\/([a-z0-9-]+)/gi,
+      nytimes: /https?:\/\/cooking\.nytimes\.com\/recipes\/(\d+)-([a-z0-9-]+)/gi,
     };
 
     const pattern = siteUrlPatterns[site];
@@ -121,6 +127,9 @@ function getSiteDomain(site: RecipeSite): string {
     allrecipes: 'allrecipes.com',
     foodnetwork: 'foodnetwork.com',
     epicurious: 'epicurious.com',
+    seriouseats: 'seriouseats.com',
+    bonappetit: 'bonappetit.com',
+    nytimes: 'cooking.nytimes.com',
   };
   return domains[site];
 }
@@ -136,6 +145,17 @@ function isRecipeUrl(url: string, site: RecipeSite): boolean {
       return /foodnetwork\.com\/recipes\/[^\/]+\/[^\/]+/.test(url);
     case 'epicurious':
       return /epicurious\.com\/recipes\//.test(url);
+    case 'seriouseats':
+      // Serious Eats uses flat URLs like /recipe-name or /recipe-name-1234567
+      // Exclude known non-recipe patterns
+      if (/seriouseats\.com\/(about|contact|newsletter|tag|author|search)/.test(url)) return false;
+      if (/seriouseats\.com\/[a-z]+-recipes-\d+$/.test(url)) return false; // category pages like /beef-recipes-5117819
+      // Match URLs with at least 2 hyphenated words (likely recipes)
+      return /seriouseats\.com\/[a-z0-9]+-[a-z0-9-]+/.test(url);
+    case 'bonappetit':
+      return /bonappetit\.com\/recipe\//.test(url);
+    case 'nytimes':
+      return /cooking\.nytimes\.com\/recipes\/\d+/.test(url);
     default:
       return false;
   }
@@ -160,6 +180,22 @@ function extractTitleFromUrl(url: string, site: RecipeSite): string {
     }
     case 'epicurious': {
       const match = url.match(/\/recipes\/(?:food\/views\/)?([a-z0-9-]+)/i);
+      slug = match ? match[1] : '';
+      break;
+    }
+    case 'seriouseats': {
+      // New format: /recipe-name-1234567 or /recipe-name-recipe
+      const match = url.match(/seriouseats\.com\/([a-z0-9-]+?)(?:-\d{5,})?$/i);
+      slug = match ? match[1] : '';
+      break;
+    }
+    case 'bonappetit': {
+      const match = url.match(/\/recipe\/([a-z0-9-]+)/i);
+      slug = match ? match[1] : '';
+      break;
+    }
+    case 'nytimes': {
+      const match = url.match(/\/recipes\/\d+-([a-z0-9-]+)/i);
       slug = match ? match[1] : '';
       break;
     }
@@ -269,6 +305,25 @@ export function buildCategoryUrl(site: RecipeSite, protein: ProteinCategory, low
         vegetarian: 'https://www.epicurious.com/search/vegetarian',
       };
       return epiSearchMap[protein];
+
+    case 'seriouseats':
+      // Serious Eats - use DuckDuckGo search as category pages may not be reliable
+      // Fall back to search-based discovery
+      return buildDuckDuckGoSearchUrl('seriouseats', protein, lowFat);
+
+    case 'bonappetit':
+      // Bon Appetit - use DuckDuckGo search as their category pages are not reliable
+      return buildDuckDuckGoSearchUrl('bonappetit', protein, lowFat);
+
+    case 'nytimes':
+      // NY Times Cooking search pages
+      const nytSearchMap: Record<ProteinCategory, string> = {
+        chicken: 'https://cooking.nytimes.com/search?q=chicken',
+        beef: 'https://cooking.nytimes.com/search?q=beef',
+        pork: 'https://cooking.nytimes.com/search?q=pork',
+        vegetarian: 'https://cooking.nytimes.com/search?q=vegetarian',
+      };
+      return nytSearchMap[protein];
   }
 }
 
@@ -287,6 +342,12 @@ export function parseSearchResultsPage(
       return parseFoodNetworkSearchResults(html, protein);
     case 'epicurious':
       return parseEpicuriousSearchResults(html, protein);
+    case 'seriouseats':
+      return parseSeriousEatsSearchResults(html, protein);
+    case 'bonappetit':
+      return parseBonAppetitSearchResults(html, protein);
+    case 'nytimes':
+      return parseNYTimesSearchResults(html, protein);
   }
 }
 
@@ -722,6 +783,416 @@ function parseEpicuriousSearchResults(
 }
 
 /**
+ * Parse Serious Eats search results
+ * Note: Serious Eats uses flat URLs like /recipe-name-1234567 (no /recipes/ subdirectory)
+ */
+function parseSeriousEatsSearchResults(
+  html: string,
+  protein: ProteinCategory
+): RecipeSearchResult[] {
+  const results: RecipeSearchResult[] = [];
+  const seenUrls = new Set<string>();
+
+  console.log(`[Serious Eats Parser] Starting parse for ${protein}, HTML length: ${html.length}`);
+
+  // Strategy 1: Look for embedded JSON data (Next.js __NEXT_DATA__ or JSON-LD)
+  const jsonPatterns = [
+    /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i,
+    /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi,
+  ];
+
+  for (const pattern of jsonPatterns) {
+    const matches = html.matchAll(new RegExp(pattern.source, 'gi'));
+    for (const match of matches) {
+      try {
+        const jsonStr = match[1];
+        // Look for recipe URLs in JSON - match any multi-word slug
+        const recipeUrlMatches = jsonStr.matchAll(/seriouseats\.com\/([a-z0-9]+-[a-z0-9-]+)/gi);
+        for (const urlMatch of recipeUrlMatches) {
+          const recipeSlug = urlMatch[1];
+
+          // Skip known non-recipe patterns
+          if (/^(about|contact|newsletter|tag|author|search)-/.test(recipeSlug)) continue;
+          if (/^[a-z]+-recipes-\d+$/.test(recipeSlug)) continue; // category pages
+
+          const url = `https://www.seriouseats.com/${recipeSlug}`;
+
+          if (seenUrls.has(url)) continue;
+          seenUrls.add(url);
+
+          const title = recipeSlug
+            .replace(/-\d{5,}$/, '') // Remove trailing ID
+            .replace(/-recipe$/, '') // Remove trailing -recipe
+            .replace(/-/g, ' ')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+
+          results.push({
+            url,
+            title,
+            rating: undefined,
+            reviewCount: undefined,
+            thumbnailUrl: undefined,
+            site: 'seriouseats',
+            proteinCategory: protein,
+          });
+        }
+      } catch {
+        // Continue on error
+      }
+    }
+  }
+
+  console.log(`[Serious Eats Parser] Found ${results.length} recipes from JSON`);
+
+  // Strategy 2: Look for Serious Eats recipe URLs anywhere in HTML
+  // Match any multi-word slug (at least one hyphen)
+  const urlPattern = /https?:\/\/(?:www\.)?seriouseats\.com\/([a-z0-9]+-[a-z0-9-]+)/gi;
+  let urlMatch;
+
+  while ((urlMatch = urlPattern.exec(html)) !== null) {
+    const recipeSlug = urlMatch[1];
+
+    // Skip known non-recipe patterns
+    if (/^(about|contact|newsletter|tag|author|search)-/.test(recipeSlug)) continue;
+    if (/^[a-z]+-recipes-\d+$/.test(recipeSlug)) continue; // category pages
+
+    const url = `https://www.seriouseats.com/${recipeSlug}`;
+
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+
+    let title = recipeSlug
+      .replace(/-\d{5,}$/, '') // Remove trailing ID
+      .replace(/-recipe$/, '') // Remove trailing -recipe
+      .replace(/-/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
+    // Try to find better title
+    const matchIndex = urlMatch.index;
+    const surroundingHtml = html.substring(
+      Math.max(0, matchIndex - 500),
+      Math.min(html.length, matchIndex + 500)
+    );
+
+    const titleMatch = surroundingHtml.match(/(?:title|alt|aria-label)=["']([^"']{5,100})["']/i);
+    if (titleMatch && !titleMatch[1].includes('http')) {
+      title = titleMatch[1].replace(/&amp;/g, '&').trim();
+    }
+
+    results.push({
+      url,
+      title,
+      rating: undefined,
+      reviewCount: undefined,
+      thumbnailUrl: undefined,
+      site: 'seriouseats',
+      proteinCategory: protein,
+    });
+  }
+
+  // Strategy 3: Look for href links with recipe patterns (flat URLs with multiple words)
+  const hrefPattern = /href=["'](\/[a-z0-9]+-[a-z0-9-]+)["']/gi;
+  let hrefMatch;
+
+  while ((hrefMatch = hrefPattern.exec(html)) !== null) {
+    const recipePath = hrefMatch[1];
+    const slug = recipePath.slice(1); // Remove leading /
+
+    // Skip known non-recipe patterns
+    if (/^(about|contact|newsletter|tag|author|search)-/.test(slug)) continue;
+    if (/^[a-z]+-recipes-\d+$/.test(slug)) continue; // category pages
+
+    const url = `https://www.seriouseats.com${recipePath}`;
+
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+
+    const title = slug
+      .replace(/-\d{5,}$/, '')
+      .replace(/-recipe$/, '')
+      .replace(/-/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ') || 'Recipe';
+
+    results.push({
+      url,
+      title,
+      rating: undefined,
+      reviewCount: undefined,
+      thumbnailUrl: undefined,
+      site: 'seriouseats',
+      proteinCategory: protein,
+    });
+  }
+
+  console.log(`[Serious Eats Parser] Total recipes found: ${results.length}`);
+  return results;
+}
+
+/**
+ * Parse Bon Appetit search results
+ */
+function parseBonAppetitSearchResults(
+  html: string,
+  protein: ProteinCategory
+): RecipeSearchResult[] {
+  const results: RecipeSearchResult[] = [];
+  const seenUrls = new Set<string>();
+
+  console.log(`[Bon Appetit Parser] Starting parse for ${protein}, HTML length: ${html.length}`);
+
+  // Strategy 1: Look for embedded JSON data
+  const jsonPatterns = [
+    /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i,
+    /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi,
+  ];
+
+  for (const pattern of jsonPatterns) {
+    const matches = html.matchAll(new RegExp(pattern.source, 'gi'));
+    for (const match of matches) {
+      try {
+        const jsonStr = match[1];
+        // Look for recipe URLs in JSON
+        const recipeUrlMatches = jsonStr.matchAll(/bonappetit\.com\/recipe\/([a-z0-9-]+)/gi);
+        for (const urlMatch of recipeUrlMatches) {
+          const recipeSlug = urlMatch[1];
+          const url = `https://www.bonappetit.com/recipe/${recipeSlug}`;
+
+          if (seenUrls.has(url)) continue;
+          seenUrls.add(url);
+
+          const title = recipeSlug
+            .replace(/-\d+$/, '')
+            .replace(/-/g, ' ')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+
+          results.push({
+            url,
+            title,
+            rating: undefined,
+            reviewCount: undefined,
+            thumbnailUrl: undefined,
+            site: 'bonappetit',
+            proteinCategory: protein,
+          });
+        }
+      } catch {
+        // Continue on error
+      }
+    }
+  }
+
+  console.log(`[Bon Appetit Parser] Found ${results.length} recipes from JSON`);
+
+  // Strategy 2: Look for Bon Appetit recipe URLs anywhere in HTML
+  const urlPattern = /https?:\/\/(?:www\.)?bonappetit\.com\/recipe\/([a-z0-9-]+)/gi;
+  let urlMatch;
+
+  while ((urlMatch = urlPattern.exec(html)) !== null) {
+    const recipeSlug = urlMatch[1];
+    const url = `https://www.bonappetit.com/recipe/${recipeSlug}`;
+
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+
+    let title = recipeSlug
+      .replace(/-\d+$/, '')
+      .replace(/-/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
+    // Try to find better title
+    const matchIndex = urlMatch.index;
+    const surroundingHtml = html.substring(
+      Math.max(0, matchIndex - 500),
+      Math.min(html.length, matchIndex + 500)
+    );
+
+    const titleMatch = surroundingHtml.match(/(?:title|alt|aria-label)=["']([^"']{5,100})["']/i);
+    if (titleMatch && !titleMatch[1].includes('http')) {
+      title = titleMatch[1].replace(/&amp;/g, '&').trim();
+    }
+
+    results.push({
+      url,
+      title,
+      rating: undefined,
+      reviewCount: undefined,
+      thumbnailUrl: undefined,
+      site: 'bonappetit',
+      proteinCategory: protein,
+    });
+  }
+
+  // Strategy 3: Look for href links with recipe paths
+  const hrefPattern = /href=["'](\/recipe\/[a-z0-9-]+)["']/gi;
+  let hrefMatch;
+
+  while ((hrefMatch = hrefPattern.exec(html)) !== null) {
+    const recipePath = hrefMatch[1];
+    const url = `https://www.bonappetit.com${recipePath}`;
+
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+
+    const pathMatch = recipePath.match(/\/recipe\/([a-z0-9-]+)/i);
+    const title = pathMatch
+      ? pathMatch[1].replace(/-\d+$/, '').replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      : 'Recipe';
+
+    results.push({
+      url,
+      title,
+      rating: undefined,
+      reviewCount: undefined,
+      thumbnailUrl: undefined,
+      site: 'bonappetit',
+      proteinCategory: protein,
+    });
+  }
+
+  console.log(`[Bon Appetit Parser] Total recipes found: ${results.length}`);
+  return results;
+}
+
+/**
+ * Parse NY Times Cooking search results
+ */
+function parseNYTimesSearchResults(
+  html: string,
+  protein: ProteinCategory
+): RecipeSearchResult[] {
+  const results: RecipeSearchResult[] = [];
+  const seenUrls = new Set<string>();
+
+  console.log(`[NY Times Cooking Parser] Starting parse for ${protein}, HTML length: ${html.length}`);
+
+  // Strategy 1: Look for embedded JSON data
+  const jsonPatterns = [
+    /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i,
+    /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi,
+  ];
+
+  for (const pattern of jsonPatterns) {
+    const matches = html.matchAll(new RegExp(pattern.source, 'gi'));
+    for (const match of matches) {
+      try {
+        const jsonStr = match[1];
+        // Look for recipe URLs in JSON - NYT format: /recipes/1234-recipe-name
+        const recipeUrlMatches = jsonStr.matchAll(/cooking\.nytimes\.com\/recipes\/(\d+)-([a-z0-9-]+)/gi);
+        for (const urlMatch of recipeUrlMatches) {
+          const recipeId = urlMatch[1];
+          const recipeSlug = urlMatch[2];
+          const url = `https://cooking.nytimes.com/recipes/${recipeId}-${recipeSlug}`;
+
+          if (seenUrls.has(url)) continue;
+          seenUrls.add(url);
+
+          const title = recipeSlug
+            .replace(/-/g, ' ')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+
+          results.push({
+            url,
+            title,
+            rating: undefined,
+            reviewCount: undefined,
+            thumbnailUrl: undefined,
+            site: 'nytimes',
+            proteinCategory: protein,
+          });
+        }
+      } catch {
+        // Continue on error
+      }
+    }
+  }
+
+  console.log(`[NY Times Cooking Parser] Found ${results.length} recipes from JSON`);
+
+  // Strategy 2: Look for NY Times Cooking recipe URLs anywhere in HTML
+  const urlPattern = /https?:\/\/cooking\.nytimes\.com\/recipes\/(\d+)-([a-z0-9-]+)/gi;
+  let urlMatch;
+
+  while ((urlMatch = urlPattern.exec(html)) !== null) {
+    const recipeId = urlMatch[1];
+    const recipeSlug = urlMatch[2];
+    const url = `https://cooking.nytimes.com/recipes/${recipeId}-${recipeSlug}`;
+
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+
+    let title = recipeSlug
+      .replace(/-/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
+    // Try to find better title
+    const matchIndex = urlMatch.index;
+    const surroundingHtml = html.substring(
+      Math.max(0, matchIndex - 500),
+      Math.min(html.length, matchIndex + 500)
+    );
+
+    const titleMatch = surroundingHtml.match(/(?:title|alt|aria-label)=["']([^"']{5,100})["']/i);
+    if (titleMatch && !titleMatch[1].includes('http')) {
+      title = titleMatch[1].replace(/&amp;/g, '&').trim();
+    }
+
+    results.push({
+      url,
+      title,
+      rating: undefined,
+      reviewCount: undefined,
+      thumbnailUrl: undefined,
+      site: 'nytimes',
+      proteinCategory: protein,
+    });
+  }
+
+  // Strategy 3: Look for href links with recipe paths
+  const hrefPattern = /href=["'](\/recipes\/\d+-[a-z0-9-]+)["']/gi;
+  let hrefMatch;
+
+  while ((hrefMatch = hrefPattern.exec(html)) !== null) {
+    const recipePath = hrefMatch[1];
+    const url = `https://cooking.nytimes.com${recipePath}`;
+
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+
+    const pathMatch = recipePath.match(/\/recipes\/\d+-([a-z0-9-]+)/i);
+    const title = pathMatch
+      ? pathMatch[1].replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      : 'Recipe';
+
+    results.push({
+      url,
+      title,
+      rating: undefined,
+      reviewCount: undefined,
+      thumbnailUrl: undefined,
+      site: 'nytimes',
+      proteinCategory: protein,
+    });
+  }
+
+  console.log(`[NY Times Cooking Parser] Total recipes found: ${results.length}`);
+  return results;
+}
+
+/**
  * Extract nutrition information from recipe page HTML
  * Checks schema.org first, then falls back to HTML parsing
  */
@@ -743,6 +1214,11 @@ export function extractNutritionFromRecipePage(
       return parseFoodNetworkNutrition(html);
     case 'epicurious':
       return parseEpicuriousNutrition(html);
+    case 'seriouseats':
+    case 'bonappetit':
+    case 'nytimes':
+      // These sites primarily use schema.org, fallback to generic parser
+      return parseAllRecipesNutrition(html);
   }
 }
 
@@ -957,6 +1433,27 @@ export const SITE_CONFIGS: Record<RecipeSite, SiteScraperConfig> = {
     displayName: 'Epicurious',
     searchUrlBuilder: (protein) => buildCategoryUrl('epicurious', protein),
     parseSearchResults: (html) => parseEpicuriousSearchResults(html, 'beef'),
+    hasSchemaOrg: true,
+  },
+  seriouseats: {
+    name: 'seriouseats',
+    displayName: 'Serious Eats',
+    searchUrlBuilder: (protein) => buildCategoryUrl('seriouseats', protein),
+    parseSearchResults: (html) => parseSeriousEatsSearchResults(html, 'beef'),
+    hasSchemaOrg: true,
+  },
+  bonappetit: {
+    name: 'bonappetit',
+    displayName: 'Bon Appetit',
+    searchUrlBuilder: (protein) => buildCategoryUrl('bonappetit', protein),
+    parseSearchResults: (html) => parseBonAppetitSearchResults(html, 'beef'),
+    hasSchemaOrg: true,
+  },
+  nytimes: {
+    name: 'nytimes',
+    displayName: 'NY Times Cooking',
+    searchUrlBuilder: (protein) => buildCategoryUrl('nytimes', protein),
+    parseSearchResults: (html) => parseNYTimesSearchResults(html, 'beef'),
     hasSchemaOrg: true,
   },
 };

@@ -3,7 +3,7 @@ import type { ParsedRecipe } from './import';
 import type { DuplicateCheckResult } from '@/services/duplicateDetectionService';
 
 // Supported recipe sites
-export type RecipeSite = 'allrecipes' | 'foodnetwork' | 'epicurious';
+export type RecipeSite = 'allrecipes' | 'foodnetwork' | 'epicurious' | 'seriouseats' | 'bonappetit' | 'nytimes';
 
 // Protein categories for filtering
 export type ProteinCategory = 'beef' | 'chicken' | 'pork' | 'vegetarian';

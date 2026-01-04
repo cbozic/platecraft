@@ -305,6 +305,9 @@ export function SettingsPage() {
       const updatedSettings = await settingsRepository.get();
       setSettings(updatedSettings);
 
+      // Apply the imported theme to the DOM
+      document.documentElement.setAttribute('data-theme', updatedSettings.theme === 'system' ? '' : updatedSettings.theme);
+
       // Update API key inputs with imported values (if any)
       if (updatedSettings.anthropicApiKey) {
         setApiKeyInput(updatedSettings.anthropicApiKey);
@@ -350,6 +353,9 @@ export function SettingsPage() {
 
       // Reload settings
       await loadData();
+
+      // Apply the reset theme (system default) to the DOM
+      document.documentElement.setAttribute('data-theme', '');
 
       // Force child components to refresh by incrementing version
       setDataVersion(prev => prev + 1);

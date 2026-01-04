@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams, useLocation } from 'react-router-dom';
-import { Plus, Search, Filter, Upload } from 'lucide-react';
+import { Plus, Search, Filter, Upload, Heart } from 'lucide-react';
 import { Button, Input, Card } from '@/components/ui';
 import { RecipeFilterPanel, getActiveFilterCount, DEFAULT_FILTERS, ShareButton } from '@/components/recipe';
 import type { RecipeFilters } from '@/components/recipe';
@@ -158,6 +158,15 @@ export function RecipesPage() {
 
   const activeFilterCount = getActiveFilterCount(filters);
 
+  const handleToggleFavorite = async (recipeId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await recipeRepository.toggleFavorite(recipeId);
+    setRecipes((prev) =>
+      prev.map((r) => (r.id === recipeId ? { ...r, isFavorite: !r.isFavorite } : r))
+    );
+  };
+
   if (isLoading) {
     return (
       <div className={styles.loading}>
@@ -264,14 +273,23 @@ export function RecipesPage() {
                       <div className={styles.placeholderImage}>🍽️</div>
                     )}
                   </div>
-                  <div
-                    className={styles.cardShareButton}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                  >
-                    <ShareButton recipe={recipe} variant="icon" size="sm" />
+                  <div className={styles.cardActions}>
+                    <button
+                      className={`${styles.cardActionButton} ${recipe.isFavorite ? styles.favorited : ''}`}
+                      onClick={(e) => handleToggleFavorite(recipe.id, e)}
+                      aria-label={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                      <Heart size={16} fill={recipe.isFavorite ? 'currentColor' : 'none'} />
+                    </button>
+                    <div
+                      className={styles.cardActionButton}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                    >
+                      <ShareButton recipe={recipe} variant="icon" size="sm" />
+                    </div>
                   </div>
                 </div>
                 <div className={styles.cardContent}>

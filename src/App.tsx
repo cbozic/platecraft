@@ -10,9 +10,13 @@ import {
   ShoppingPage,
   SettingsPage,
 } from '@/pages';
-import { db } from '@/db';
+import { db, settingsRepository } from '@/db';
 import { IOSInstallBannerProvider } from '@/context/IOSInstallBannerContext';
 import '@/styles/global.css';
+
+function applyTheme(theme: string) {
+  document.documentElement.setAttribute('data-theme', theme === 'system' ? '' : theme);
+}
 
 const router = createBrowserRouter([
   {
@@ -59,8 +63,13 @@ const router = createBrowserRouter([
 
 function App() {
   useEffect(() => {
-    // Initialize the database on app start
-    db.initialize().catch(console.error);
+    // Initialize the database and apply saved theme on app start
+    db.initialize()
+      .then(() => settingsRepository.get())
+      .then((settings) => {
+        applyTheme(settings.theme);
+      })
+      .catch(console.error);
   }, []);
 
   return (

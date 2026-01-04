@@ -11,8 +11,6 @@ interface AddItemModalProps {
   onAdd: (item: Omit<ShoppingItem, 'id'>) => void;
 }
 
-const COMMON_UNITS: MeasurementUnit[] = ['each', 'lb', 'oz', 'cup', 'tbsp', 'tsp', 'can', 'package', 'bunch'];
-
 export function AddItemModal({ isOpen, onClose, onAdd }: AddItemModalProps) {
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -91,10 +89,10 @@ export function AddItemModal({ isOpen, onClose, onAdd }: AddItemModalProps) {
               onChange={(e) => setUnit(e.target.value as MeasurementUnit | '')}
               className={styles.select}
             >
-              <option value="">None</option>
-              {COMMON_UNITS.map((u) => (
-                <option key={u} value={u}>
-                  {UNIT_INFO[u].name}
+              <option value="">Unit</option>
+              {Object.entries(UNIT_INFO).map(([key, info]) => (
+                <option key={key} value={key}>
+                  {info.abbreviation || info.name}
                 </option>
               ))}
             </select>

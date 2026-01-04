@@ -11,8 +11,12 @@ import {
   Filter,
   Copy,
   Tag,
+  ExternalLink,
+  Eye,
+  Clock,
+  Users,
 } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Button, Modal } from '@/components/ui';
 import { recipeRepository } from '@/db';
 import { recipeImportService } from '@/services';
 import { executeBulkImport, getSiteDisplayName, getProteinDisplayName } from '@/services/bulkImportOrchestrator';
@@ -29,8 +33,8 @@ import styles from './BulkImportTab.module.css';
 
 type Step = 'configure' | 'searching' | 'importing' | 'preview' | 'saving' | 'complete' | 'error';
 
-// Epicurious uses DuckDuckGo search instead of direct scraping
-const ALL_SITES: RecipeSite[] = ['allrecipes', 'foodnetwork', 'epicurious'];
+// Some sites use DuckDuckGo search instead of direct scraping
+const ALL_SITES: RecipeSite[] = ['allrecipes', 'foodnetwork', 'epicurious', 'seriouseats', 'bonappetit', 'nytimes'];
 const ALL_PROTEINS: ProteinCategory[] = ['beef', 'chicken', 'pork', 'vegetarian'];
 
 export function BulkImportTab() {
@@ -56,6 +60,7 @@ export function BulkImportTab() {
   const [error, setError] = useState<string | null>(null);
   const [filterSite, setFilterSite] = useState<RecipeSite | 'all'>('all');
   const [filterProtein, setFilterProtein] = useState<ProteinCategory | 'all'>('all');
+  const [detailItem, setDetailItem] = useState<BulkImportQueueItem | null>(null);
 
   // Calculate estimated recipe count
   const estimatedCount = config.sites.length * config.proteins.length * config.recipesPerCategory;
@@ -150,6 +155,16 @@ export function BulkImportTab() {
 
   const handleDeselectAll = () => {
     setSelectedRecipeIds(new Set());
+  };
+
+  const handleViewDetails = (item: BulkImportQueueItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDetailItem(item);
+  };
+
+  const handleOpenSource = (url: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleSaveSelected = async () => {
@@ -553,6 +568,17 @@ export function BulkImportTab() {
                           {item.recipe.cookTimeMinutes && <span>{item.recipe.cookTimeMinutes}m cook</span>}
                         </div>
                       )}
+
+                      <div className={styles.recipeActions}>
+                        <button
+                          className={styles.viewDetailsButton}
+                          onClick={(e) => handleViewDetails(item, e)}
+                          title="View recipe details"
+                        >
+                          <Eye size={14} />
+                          <span>Details</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -585,6 +611,125 @@ export function BulkImportTab() {
             </Button>
           </div>
         </div>
+
+        {/* Recipe Details Modal */}
+        <Modal
+          isOpen={!!detailItem}
+          onClose={() => setDetailItem(null)}
+          title={detailItem?.recipe?.title || detailItem?.searchResult.title || 'Recipe Details'}
+          size="lg"
+        >
+          {detailItem && (
+            <div className={styles.detailModal}>
+              {/* Source URL */}
+              <div className={styles.detailSource}>
+                <span className={styles.detailLabel}>Source:</span>
+                <button
+                  className={styles.sourceLink}
+                  onClick={(e) => handleOpenSource(detailItem.searchResult.url, e)}
+                >
+                  {getSiteDisplayName(detailItem.searchResult.site)}
+                  <ExternalLink size={14} />
+                </button>
+              </div>
+
+              {/* Meta info */}
+              <div className={styles.detailMeta}>
+                {detailItem.recipe?.servings && (
+                  <div className={styles.detailMetaItem}>
+                    <Users size={16} />
+                    <span>{detailItem.recipe.servings} servings</span>
+                  </div>
+                )}
+                {detailItem.recipe?.prepTimeMinutes && (
+                  <div className={styles.detailMetaItem}>
+                    <Clock size={16} />
+                    <span>{detailItem.recipe.prepTimeMinutes}m prep</span>
+                  </div>
+                )}
+                {detailItem.recipe?.cookTimeMinutes && (
+                  <div className={styles.detailMetaItem}>
+                    <Clock size={16} />
+                    <span>{detailItem.recipe.cookTimeMinutes}m cook</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              {detailItem.recipe?.description && (
+                <div className={styles.detailSection}>
+                  <h4>Description</h4>
+                  <p>{detailItem.recipe.description}</p>
+                </div>
+              )}
+
+              {/* Ingredients */}
+              {detailItem.recipe?.ingredients && detailItem.recipe.ingredients.length > 0 && (
+                <div className={styles.detailSection}>
+                  <h4>Ingredients ({detailItem.recipe.ingredients.length})</h4>
+                  <ul className={styles.ingredientList}>
+                    {detailItem.recipe.ingredients.map((ing, idx) => (
+                      <li key={idx}>
+                        {ing.quantity && <span className={styles.ingredientQty}>{ing.quantity}</span>}
+                        {ing.unit && <span className={styles.ingredientUnit}>{ing.unit}</span>}
+                        <span className={styles.ingredientName}>{ing.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Instructions */}
+              {detailItem.recipe?.instructions && (
+                <div className={styles.detailSection}>
+                  <h4>Instructions</h4>
+                  <ol className={styles.instructionList}>
+                    {detailItem.recipe.instructions.split('\n').filter(s => s.trim()).map((step, idx) => (
+                      <li key={idx}>{step.replace(/^\d+\.\s*/, '').trim()}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* Nutrition */}
+              {detailItem.nutrition && (
+                <div className={styles.detailSection}>
+                  <h4>Nutrition (per serving)</h4>
+                  <div className={styles.nutritionGrid}>
+                    <div className={styles.nutritionItem}>
+                      <span className={styles.nutritionValue}>{detailItem.nutrition.calories}</span>
+                      <span className={styles.nutritionLabel}>Calories</span>
+                    </div>
+                    <div className={styles.nutritionItem}>
+                      <span className={styles.nutritionValue}>{detailItem.nutrition.protein}g</span>
+                      <span className={styles.nutritionLabel}>Protein</span>
+                    </div>
+                    <div className={styles.nutritionItem}>
+                      <span className={styles.nutritionValue}>{detailItem.nutrition.carbohydrates}g</span>
+                      <span className={styles.nutritionLabel}>Carbs</span>
+                    </div>
+                    <div className={styles.nutritionItem}>
+                      <span className={styles.nutritionValue}>{detailItem.nutrition.fat}g</span>
+                      <span className={styles.nutritionLabel}>Fat</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tags */}
+              {detailItem.detectedTags && detailItem.detectedTags.length > 0 && (
+                <div className={styles.detailSection}>
+                  <h4>Detected Tags</h4>
+                  <div className={styles.detailTags}>
+                    {detailItem.detectedTags.map((tag) => (
+                      <span key={tag} className={styles.badgeTag}>{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal>
       </div>
     );
   }

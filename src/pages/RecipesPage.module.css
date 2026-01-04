@@ -112,17 +112,38 @@
   opacity: 0.3;
 }
 
-.cardShareButton {
+.cardActions {
   position: absolute;
   top: var(--spacing-xs);
   right: var(--spacing-xs);
-  background-color: rgba(0, 0, 0, 0.4);
-  border-radius: var(--radius-md);
-  transition: background-color var(--transition-fast);
+  display: flex;
+  gap: var(--spacing-xs);
 }
 
-.cardShareButton:hover {
+.cardActionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  background-color: rgba(0, 0, 0, 0.4);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-on-dark);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.cardActionButton:hover {
   background-color: rgba(0, 0, 0, 0.6);
+}
+
+.cardActionButton.favorited {
+  color: var(--color-error);
+}
+
+.cardActionButton.favorited:hover {
+  color: var(--color-error);
 }
 
 .cardContent {

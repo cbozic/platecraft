@@ -13,24 +13,6 @@ interface IngredientInputStepProps {
   onRemove: (id: string) => void;
 }
 
-// Common unit options for the dropdown
-const UNIT_OPTIONS: { value: MeasurementUnit | ''; label: string }[] = [
-  { value: '', label: 'No unit' },
-  { value: 'lb', label: 'lb (pound)' },
-  { value: 'oz', label: 'oz (ounce)' },
-  { value: 'kg', label: 'kg (kilogram)' },
-  { value: 'g', label: 'g (gram)' },
-  { value: 'cup', label: 'cup' },
-  { value: 'tbsp', label: 'tbsp' },
-  { value: 'tsp', label: 'tsp' },
-  { value: 'l', label: 'L (liter)' },
-  { value: 'ml', label: 'ml' },
-  { value: 'each', label: 'each' },
-  { value: 'can', label: 'can' },
-  { value: 'package', label: 'package' },
-  { value: 'bunch', label: 'bunch' },
-];
-
 export function IngredientInputStep({
   ingredients,
   onAdd,
@@ -145,9 +127,10 @@ export function IngredientInputStep({
                       onChange={(e) => setEditUnit(e.target.value as MeasurementUnit | '')}
                       className={styles.editUnitSelect}
                     >
-                      {UNIT_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
+                      <option value="">Unit</option>
+                      {Object.entries(UNIT_INFO).map(([key, info]) => (
+                        <option key={key} value={key}>
+                          {info.abbreviation || info.name}
                         </option>
                       ))}
                     </select>
@@ -224,9 +207,10 @@ export function IngredientInputStep({
             onChange={(e) => setNewUnit(e.target.value as MeasurementUnit | '')}
             className={styles.unitSelect}
           >
-            {UNIT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            <option value="">Unit</option>
+            {Object.entries(UNIT_INFO).map(([key, info]) => (
+              <option key={key} value={key}>
+                {info.abbreviation || info.name}
               </option>
             ))}
           </select>
