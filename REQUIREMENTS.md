@@ -500,6 +500,9 @@ Four-step wizard for intelligent meal planning based on available ingredients:
 - Include all: recipes, tags, meal plans, shopping lists, settings
 - Export individual recipes as JSON
 - Export shopping list as plain text or JSON
+- **WebShare API Integration**: Uses native device sharing when available
+  - Falls back to file download when WebShare not supported
+  - Allows sharing directly to apps, email, messages, etc.
 
 ### 7.2 Import
 - Import from JSON (full backup or individual recipes)
@@ -522,9 +525,35 @@ Four-step wizard for intelligent meal planning based on available ingredients:
 
 ---
 
-## 8. Print Functionality
+## 8. Recipe Sharing
 
-### 8.1 Printable Views
+### 8.1 Share Functionality
+- Share individual recipes via secure, shareable links
+- Generate unique URLs for each shared recipe
+- Links work without requiring the recipient to have an account
+
+### 8.2 Encryption
+- AES-256 encryption for sensitive recipe data
+- Encryption key embedded in URL fragment (not sent to server)
+- Optional: Choose which fields to include in shared recipe
+
+### 8.3 Share Options
+- Include/exclude ingredients
+- Include/exclude nutritional information
+- Include/exclude images
+- Shareable recipe collections (multiple recipes in one link)
+
+### 8.4 Technical Implementation
+- Service: `recipeShareService.ts` handles link generation and parsing
+- Service: `cryptoService.ts` provides AES-256 encryption/decryption
+- Component: `ShareButton.tsx` provides sharing UI
+- Web Crypto API used for browser-native encryption
+
+---
+
+## 9. Print Functionality
+
+### 9.1 Printable Views
 - Individual recipe (full page format)
 - Recipe card (compact, multiple per page)
 - Calendar month view
@@ -536,7 +565,7 @@ Four-step wizard for intelligent meal planning based on available ingredients:
   - Ingredients scaled to planned serving sizes
   - Includes recipe instructions and notes
 
-### 8.2 Print Options
+### 9.2 Print Options
 - Include/exclude images
 - Include/exclude nutritional info
 - Font size adjustment
@@ -544,9 +573,9 @@ Four-step wizard for intelligent meal planning based on available ingredients:
 
 ---
 
-## 9. User Interface
+## 10. User Interface
 
-### 9.1 Main Navigation
+### 10.1 Main Navigation
 - Recipes (browse/search)
 - Add Recipe
 - Import Recipe (Photo/URL/Text)
@@ -554,13 +583,13 @@ Four-step wizard for intelligent meal planning based on available ingredients:
 - Shopping List
 - Settings
 
-### 9.2 Recipe Views
+### 10.2 Recipe Views
 - Grid view (card with image thumbnails)
 - List view (compact rows)
 - Detail view (full recipe display)
 - Edit mode
 
-### 9.3 Search & Filter
+### 10.3 Search & Filter
 - Global search bar
 - Filter panel:
   - By tags (multi-select)
@@ -569,7 +598,7 @@ Four-step wizard for intelligent meal planning based on available ingredients:
   - Has image (yes/no)
   - Has nutritional info (yes/no)
 
-### 9.4 Settings
+### 10.4 Settings
 - Default unit system (US/Metric/UK)
 - Default serving size
 - Theme (light/dark/system)
@@ -581,19 +610,39 @@ Four-step wizard for intelligent meal planning based on available ingredients:
 - Data management (import/export/clear)
 - **Recipe Import Settings**:
   - Anthropic API key (stored locally, masked display)
+  - USDA API key (stored locally, masked display)
   - Preferred import method (API or Manual paste)
+- **Meal Planning Settings**:
+  - Daily calorie goal
+  - Staple ingredients management (ingredients always assumed to be on hand)
 
 ---
 
-## 10. Offline Capability
+## 11. Offline Capability
 
-### 10.1 PWA Features
+### 11.1 PWA Features
 - Service Worker for offline access
 - Installable as app (Add to Home Screen)
 - All core features work offline
 - Background sync when connection restored
 
-### 10.2 External Service Handling
+### 11.2 iOS Install Banner
+- Detects iOS Safari users without app installed
+- Shows instructional banner for "Add to Home Screen"
+- Step-by-step guidance for iOS installation process
+- Dismissible with "Don't show again" option
+- Tracks installation state via localStorage
+- Components: `IOSInstallBanner.tsx`, `useIOSInstallPrompt.ts`
+
+### 11.3 Backup Reminder
+- Periodic reminder to export/backup data
+- Configurable reminder interval
+- Tracks last backup date
+- Shows notification banner when backup is due
+- Dismissible with snooze option
+- Components: `BackupReminderBanner.tsx`, `useBackupReminder.ts`
+
+### 11.4 External Service Handling
 - OCR: Queue requests when offline, process when online
 - Nutritional lookup: Cache results, show cached data offline
 - Calendar sync: Show last-synced data, refresh when online
@@ -601,9 +650,9 @@ Four-step wizard for intelligent meal planning based on available ingredients:
 
 ---
 
-## 11. Accessibility
+## 12. Accessibility
 
-### 11.1 Requirements
+### 12.1 Requirements
 - WCAG 2.1 AA compliance
 - Keyboard navigation throughout
 - Screen reader compatible
@@ -614,7 +663,7 @@ Four-step wizard for intelligent meal planning based on available ingredients:
 
 ---
 
-## 12. Future Considerations (Out of Scope for v1)
+## 13. Future Considerations (Out of Scope for v1)
 
 These features are explicitly NOT included in initial requirements:
 - Multi-user / family sharing
@@ -767,6 +816,14 @@ These features are explicitly NOT included in initial requirements:
 - [x] Image data handling (Blob ↔ Base64 for export/import)
 - [x] Import/export validation with error reporting
 - [x] Clear all data functionality
+- [x] WebShare API integration for native device sharing
+
+**Recipe Sharing:**
+- [x] Share individual recipes via encrypted links
+- [x] AES-256 encryption using Web Crypto API
+- [x] Shareable recipe collections
+- [x] Include/exclude options for ingredients, nutrition, images
+- [x] ShareButton component for sharing UI
 
 **UI Components:**
 - [x] Base UI components (Button, Input, Card, Modal, Tabs)
@@ -787,11 +844,17 @@ These features are explicitly NOT included in initial requirements:
 - [x] USDA API key storage
 - [x] Preferred import mode (API/Manual)
 - [x] Daily calorie goal
+- [x] Staple ingredients management (for meal plan assistant)
 
-### Recently Completed (December 2025)
-The final feature implementation wave completed all remaining requirements:
+**PWA Enhancements:**
+- [x] iOS Install Banner with step-by-step instructions
+- [x] Backup Reminder notifications with configurable interval
+- [x] Installation state tracking via localStorage
 
-**Nutritional Information System** (Latest):
+### Recently Completed (December 2025 - January 2026)
+The final feature implementation wave completed all remaining requirements plus additional enhancements:
+
+**Nutritional Information System**:
 - Advanced ingredient weight estimation database (140+ ingredients with grams per cup, 23+ count-based items)
 - Fuzzy matching for partial ingredient names in weight lookup
 - Comprehensive nutrition calculation from ingredients with automatic weight conversion
@@ -800,30 +863,48 @@ The final feature implementation wave completed all remaining requirements:
 - USDA FoodData Central API integration with error handling
 - Manual nutrition entry as fallback option
 
+**Recipe Sharing & Security**:
+- Secure recipe sharing via encrypted URLs
+- AES-256 encryption for sensitive recipe data
+- Web Crypto API for browser-native encryption
+- Configurable share options (ingredients, nutrition, images)
+- ShareButton component integrated in recipe detail view
+
+**PWA User Experience**:
+- iOS Install Banner for Safari users with step-by-step guidance
+- Backup Reminder system with periodic notifications
+- WebShare API integration for native device sharing
+- Enhanced offline capability
+
+**Ingredient Matching Improvements**:
+- Improved fuzzy matching algorithm for ingredient lookups
+- Staple ingredients management in settings
+
 ---
 
 ## Project Status
 
-**Status**: ✅ **FEATURE COMPLETE** - All v1.0 requirements implemented and tested.
+**Status**: ✅ **FEATURE COMPLETE** - All v1.0 requirements implemented and tested, plus additional enhancements.
 
 The application is production-ready with all core features implemented:
-- Recipe management with AI-powered import (Photo/URL/Text)
+- Recipe management with AI-powered import (Photo/URL/Text/Bulk)
 - Intelligent meal planning with ingredient matching
 - Shopping list generation with smart combining
 - Nutritional information with USDA API integration
 - Calendar integration (internal planning + external iCal support)
 - Comprehensive unit conversion and recipe scaling
-- PWA support for offline use
-- Full import/export functionality
+- PWA support for offline use with iOS-specific enhancements
+- Full import/export functionality with WebShare API
+- Secure recipe sharing with AES-256 encryption
+- Backup reminder system for data protection
 
 **Next Steps** (Optional Enhancements):
 - Comprehensive test coverage (unit + integration tests)
 - Accessibility audit (WCAG 2.1 AA compliance)
 - Performance optimization for large recipe databases
-- Additional PWA optimizations
 
 ---
 
-*Requirements Version: 2.0*
-*Last Updated: December 31, 2025*
+*Requirements Version: 2.1*
+*Last Updated: January 3, 2026*
 *Status: Feature Complete*
