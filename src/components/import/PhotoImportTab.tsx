@@ -4,12 +4,14 @@ import { Sparkles, Copy, Check, AlertCircle, ChevronRight, Loader2, Upload, Imag
 import { Button } from '@/components/ui';
 import { recipeImportService, ocrService, imageService } from '@/services';
 import type { OcrProgress, OcrQualityAssessment } from '@/services';
-import { recipeRepository, settingsRepository } from '@/db';
+import { recipeRepository, settingsRepository, tagRepository } from '@/db';
 import { useImportStatePersistence, compressImageForStorage } from '@/hooks';
 import { useIOSInstallBanner } from '@/context/IOSInstallBannerContext';
-import type { ParsedRecipe, RecipeImage } from '@/types';
+import type { ParsedRecipe, RecipeImage, Tag } from '@/types';
 import { RECIPE_VISION_PROMPT } from '@/types/import';
 import styles from './PhotoImportTab.module.css';
+
+const PHOTO_IMPORT_TAGS_KEY = 'photoImportSelectedTags';
 
 type ImportStep = 'upload' | 'ocr' | 'ocr-review' | 'vision-processing' | 'processing' | 'manual-prompt' | 'manual-response' | 'manual-vision-prompt' | 'manual-vision-response' | 'preview' | 'error';
 
@@ -53,6 +55,8 @@ export function PhotoImportTab() {
   const [wasRestored, setWasRestored] = useState(false);
   const [imageThumbnails, setImageThumbnails] = useState<string[]>([]);
   const [useVisionMode, setUseVisionMode] = useState(false);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   // Combine state for persistence
   const persistedState = useMemo((): PersistedState => ({
@@ -112,6 +116,28 @@ export function PhotoImportTab() {
       setUseVisionMode(defaultMode === 'vision');
     };
     loadSettings();
+  }, []);
+
+  // Load available tags and restore selected tags from localStorage
+  useEffect(() => {
+    const loadTags = async () => {
+      const tags = await tagRepository.getVisibleTags();
+      setAvailableTags(tags);
+
+      // Restore selected tags from localStorage
+      try {
+        const stored = localStorage.getItem(PHOTO_IMPORT_TAGS_KEY);
+        if (stored) {
+          const storedIds = JSON.parse(stored) as string[];
+          // Filter to only include valid tag IDs that still exist
+          const validIds = storedIds.filter(id => tags.some(t => t.id === id));
+          setSelectedTagIds(validIds);
+        }
+      } catch (e) {
+        console.warn('Failed to restore selected tags:', e);
+      }
+    };
+    loadTags();
   }, []);
 
   // Clean up preview URLs on unmount
@@ -197,6 +223,22 @@ export function PhotoImportTab() {
       fileInputRef.current.value = '';
     }
   }, [previewUrls]);
+
+  // Handle tag selection toggle and persist to localStorage
+  const handleTagToggle = useCallback((tagId: string) => {
+    setSelectedTagIds(prev => {
+      const newIds = prev.includes(tagId)
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId];
+      // Persist to localStorage
+      try {
+        localStorage.setItem(PHOTO_IMPORT_TAGS_KEY, JSON.stringify(newIds));
+      } catch (e) {
+        console.warn('Failed to persist selected tags:', e);
+      }
+      return newIds;
+    });
+  }, []);
 
   // Handle direct vision mode (skip OCR)
   const handleDirectVisionMode = async () => {
@@ -554,6 +596,9 @@ export function PhotoImportTab() {
     setIsSaving(true);
     try {
       const formData = recipeImportService.convertToRecipeFormData(parsedRecipe, sourceImages.length > 0 ? sourceImages : undefined);
+      // Merge user-selected tags with any tags from parsed recipe (deduplicate)
+      const mergedTags = [...new Set([...selectedTagIds, ...formData.tags])];
+      formData.tags = mergedTags;
       const newRecipe = await recipeRepository.create(formData);
       clearPersistedState(); // Clear persisted state on successful save
       triggerAfterImport();
@@ -572,6 +617,9 @@ export function PhotoImportTab() {
     // Note: We can't easily pass the Blob through sessionStorage, so images won't be preserved
     // when editing before save. This is a limitation of the current approach.
     const formData = recipeImportService.convertToRecipeFormData(parsedRecipe);
+    // Merge user-selected tags with any tags from parsed recipe (deduplicate)
+    const mergedTags = [...new Set([...selectedTagIds, ...formData.tags])];
+    formData.tags = mergedTags;
     sessionStorage.setItem('importedRecipe', JSON.stringify(formData));
     clearPersistedState(); // Clear persisted state when editing
     navigate('/recipes/new?imported=true');
@@ -713,6 +761,27 @@ export function PhotoImportTab() {
               : 'Text will be extracted first, then parsed. Best for printed text.'}
           </p>
         </div>
+
+        {availableTags.length > 0 && (
+          <div className={styles.tagSection}>
+            <label className={styles.tagSectionLabel}>Tags</label>
+            <p className={styles.tagHint}>
+              Selected tags persist between imports for batch importing from the same source.
+            </p>
+            <div className={styles.tagList}>
+              {availableTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className={`${styles.tagButton} ${selectedTagIds.includes(tag.id) ? styles.tagSelected : ''}`}
+                  onClick={() => handleTagToggle(tag.id)}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className={styles.actions}>
           <Button
