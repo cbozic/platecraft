@@ -610,15 +610,22 @@ export function PhotoImportTab() {
     }
   };
 
-  const handleEditBeforeSave = () => {
+  const handleEditBeforeSave = async () => {
     if (!parsedRecipe) return;
 
-    // Note: We can't easily pass the Blob through sessionStorage, so images won't be preserved
-    // when editing before save. This is a limitation of the current approach.
-    const formData = recipeImportService.convertToRecipeFormData(parsedRecipe);
+    const formData = recipeImportService.convertToRecipeFormData(
+      parsedRecipe,
+      sourceImages.length > 0 ? sourceImages : undefined
+    );
     // Merge user-selected tags with any tags from parsed recipe (deduplicate)
     const mergedTags = [...new Set([...selectedTagIds, ...formData.tags])];
     formData.tags = mergedTags;
+
+    // Convert Blobs to base64 so they can be stored in sessionStorage
+    if (formData.images && formData.images.length > 0) {
+      formData.images = await imageService.prepareImagesForExport(formData.images);
+    }
+
     sessionStorage.setItem('importedRecipe', JSON.stringify(formData));
     clearPersistedState(); // Clear persisted state when editing
     navigate('/recipes/new?imported=true');

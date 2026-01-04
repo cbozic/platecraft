@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { Button, Input, Card, CardBody } from '@/components/ui';
 import { ImageGallery, ImageUploader, NutritionLookup, IngredientNutritionCalculator } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
+import { imageService } from '@/services';
 import { useIOSInstallBanner } from '@/context/IOSInstallBannerContext';
 import type { Tag, Ingredient, RecipeImage, NutritionInfo } from '@/types';
 import { UNIT_INFO } from '@/types/units';
@@ -105,6 +106,11 @@ export function RecipeFormPage() {
               setReferencePageNumber(imported.referencePageNumber || '');
               setReferenceOther(imported.referenceOther || '');
               setSelectedTags(imported.tags || []);
+              // Restore images from base64 to Blobs
+              if (imported.images && imported.images.length > 0) {
+                const restoredImages = imageService.restoreImagesFromImport(imported.images);
+                setImages(restoredImages);
+              }
               // Clear the imported data from sessionStorage
               sessionStorage.removeItem('importedRecipe');
             } catch (e) {
