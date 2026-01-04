@@ -282,9 +282,9 @@ export function PhotoImportTab() {
     setSourceImages(images);
 
     if (apiAvailable) {
-      // Use API vision mode
+      // Use API vision mode - send all images for analysis
       setStep('vision-processing');
-      const result = await recipeImportService.parseWithVision(selectedFiles[0]);
+      const result = await recipeImportService.parseWithVision(selectedFiles);
 
       if (result.success && result.recipe) {
         setParsedRecipe(result.recipe);
@@ -435,9 +435,8 @@ export function PhotoImportTab() {
     }
 
     setStep('vision-processing');
-    // Use the first image for vision mode (API typically handles one image at a time)
-    // For multiple images, users should use OCR mode which combines text from all images
-    const result = await recipeImportService.parseWithVision(imageBlobs[0]);
+    // Send all images for vision mode analysis
+    const result = await recipeImportService.parseWithVision(imageBlobs);
 
     if (result.success && result.recipe) {
       setParsedRecipe(result.recipe);
@@ -790,7 +789,7 @@ export function PhotoImportTab() {
             rightIcon={useVisionMode ? <Eye size={18} /> : <ChevronRight size={18} />}
           >
             {useVisionMode
-              ? `Use Vision${selectedFiles.length > 1 ? ' (first image)' : ''}`
+              ? `Use Vision${selectedFiles.length > 1 ? ` (${selectedFiles.length} images)` : ''}`
               : `Extract Text${selectedFiles.length > 1 ? ` from ${selectedFiles.length} Images` : ''}`}
           </Button>
         </div>

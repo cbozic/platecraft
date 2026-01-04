@@ -131,9 +131,10 @@ export const recipeImportService = {
   },
 
   /**
-   * Parse a recipe directly from an image using Claude Vision
+   * Parse a recipe directly from images using Claude Vision
+   * Accepts multiple images which are all sent to Claude for analysis
    */
-  async parseWithVision(imageBlob: Blob): Promise<RecipeImportResult> {
+  async parseWithVision(imageBlobs: Blob | Blob[]): Promise<RecipeImportResult> {
     const apiKey = await settingsRepository.getAnthropicApiKey();
 
     if (!apiKey) {
@@ -143,17 +144,47 @@ export const recipeImportService = {
       };
     }
 
-    try {
-      // Convert blob to base64
-      const base64 = await imageService.blobToBase64(imageBlob);
-      // Remove the data URL prefix to get just the base64 data
-      const base64Data = base64.replace(/^data:image\/[a-z]+;base64,/, '');
+    // Normalize to array
+    const blobs = Array.isArray(imageBlobs) ? imageBlobs : [imageBlobs];
 
-      // Determine media type
-      let mediaType = 'image/jpeg';
-      if (imageBlob.type) {
-        mediaType = imageBlob.type;
+    if (blobs.length === 0) {
+      return {
+        success: false,
+        error: 'No images provided.',
+      };
+    }
+
+    try {
+      // Build content array with all images
+      const contentParts: Array<{ type: 'image'; source: { type: 'base64'; media_type: string; data: string } } | { type: 'text'; text: string }> = [];
+
+      for (const blob of blobs) {
+        // Convert blob to base64
+        const base64 = await imageService.blobToBase64(blob);
+        // Remove the data URL prefix to get just the base64 data
+        const base64Data = base64.replace(/^data:image\/[a-z]+;base64,/, '');
+
+        // Determine media type
+        let mediaType = 'image/jpeg';
+        if (blob.type) {
+          mediaType = blob.type;
+        }
+
+        contentParts.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mediaType,
+            data: base64Data,
+          },
+        });
       }
+
+      // Add the text prompt at the end
+      contentParts.push({
+        type: 'text',
+        text: RECIPE_VISION_PROMPT,
+      });
 
       const response = await fetch(CLAUDE_API_URL, {
         method: 'POST',
@@ -169,20 +200,7 @@ export const recipeImportService = {
           messages: [
             {
               role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: mediaType,
-                    data: base64Data,
-                  },
-                },
-                {
-                  type: 'text',
-                  text: RECIPE_VISION_PROMPT,
-                },
-              ],
+              content: contentParts,
             },
           ],
         }),
