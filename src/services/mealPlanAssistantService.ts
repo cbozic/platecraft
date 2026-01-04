@@ -107,12 +107,45 @@ function isWordPrefix(shorter: string[], longer: string[]): boolean {
 }
 
 /**
+ * Check if all words from searchWords appear in targetWords
+ * "pork ribs" matches "thick-cut boneless pork loin ribs" (contains both pork and ribs)
+ * Returns a score based on how many search words matched and their coverage
+ */
+function containsAllWords(searchWords: string[], targetWords: string[]): { matches: boolean; score: number } {
+  if (searchWords.length === 0 || targetWords.length === 0) {
+    return { matches: false, score: 0 };
+  }
+
+  // Check if every search word appears in target words
+  const matchedWords = searchWords.filter(searchWord =>
+    targetWords.some(targetWord =>
+      targetWord === searchWord || targetWord.startsWith(searchWord) || searchWord.startsWith(targetWord)
+    )
+  );
+
+  const allMatch = matchedWords.length === searchWords.length;
+
+  if (!allMatch) {
+    return { matches: false, score: 0 };
+  }
+
+  // Score based on:
+  // 1. How specific the match is (more search words = higher score)
+  // 2. How much of the target is covered (fewer extra words in target = higher score)
+  const specificity = searchWords.length / targetWords.length;
+  // Base score of 0.7 adjusted by specificity (0.6 to 0.75 range)
+  const score = 0.6 + (specificity * 0.15);
+
+  return { matches: true, score };
+}
+
+/**
  * Match a recipe ingredient against ingredients on hand
  */
 function matchIngredient(
   recipeIngredient: Ingredient,
   ingredientsOnHand: IngredientOnHand[]
-): { match: IngredientOnHand | null; matchType: 'exact' | 'partial' | 'fuzzy'; score: number } {
+): { match: IngredientOnHand | null; matchType: 'exact' | 'partial' | 'contains' | 'fuzzy'; score: number } {
   const normalizedName = normalizeIngredientName(recipeIngredient.name);
   const recipeWords = normalizedName.split(' ').filter(Boolean);
 
@@ -140,7 +173,37 @@ function matchIngredient(
     return { match: partialMatch, matchType: 'partial', score: 0.8 };
   }
 
-  // 3. Fuzzy match using Levenshtein distance
+  // 3. Contains match - all words from on-hand ingredient appear in recipe ingredient
+  // "pork ribs" matches "thick-cut boneless pork loin ribs (8 pieces)"
+  let bestContainsMatch: IngredientOnHand | null = null;
+  let bestContainsScore = 0;
+
+  for (const onHand of ingredientsOnHand) {
+    if (onHand.quantity <= 0) continue;
+    const onHandName = normalizeIngredientName(onHand.name);
+    const onHandWords = onHandName.split(' ').filter(Boolean);
+
+    // Check if all on-hand words appear in recipe ingredient
+    const result = containsAllWords(onHandWords, recipeWords);
+    if (result.matches && result.score > bestContainsScore) {
+      bestContainsMatch = onHand;
+      bestContainsScore = result.score;
+    }
+
+    // Also check the reverse: all recipe words appear in on-hand ingredient
+    // This handles cases where user enters more specific ingredient
+    const reverseResult = containsAllWords(recipeWords, onHandWords);
+    if (reverseResult.matches && reverseResult.score > bestContainsScore) {
+      bestContainsMatch = onHand;
+      bestContainsScore = reverseResult.score;
+    }
+  }
+
+  if (bestContainsMatch) {
+    return { match: bestContainsMatch, matchType: 'contains', score: bestContainsScore };
+  }
+
+  // 4. Fuzzy match using Levenshtein distance
   let bestFuzzyMatch: IngredientOnHand | null = null;
   let bestFuzzyScore = 0;
 

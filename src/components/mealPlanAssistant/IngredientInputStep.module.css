@@ -51,6 +51,18 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.ingredientInfo:hover {
+  background-color: var(--color-surface);
 }
 
 .quantity {
@@ -79,6 +91,77 @@
 .removeButton:hover {
   background-color: var(--color-error-light, rgba(239, 68, 68, 0.1));
   color: var(--color-error);
+}
+
+/* Edit mode styles */
+.editForm {
+  display: flex;
+  flex: 1;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.editQuantityInput {
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.editUnitSelect {
+  width: 80px;
+  flex-shrink: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.editUnitSelect:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
+.editNameInput {
+  flex: 1;
+  min-width: 100px;
+}
+
+.editActions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.saveButton,
+.cancelButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.saveButton {
+  color: var(--color-success, #22c55e);
+}
+
+.saveButton:hover {
+  background-color: rgba(34, 197, 94, 0.1);
+}
+
+.cancelButton {
+  color: var(--color-text-muted);
+}
+
+.cancelButton:hover {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
 }
 
 .addForm {

@@ -59,7 +59,7 @@ export function MealPlanAssistantModal({
     if (assistant.currentStep === 'preview' && !assistant.generatedPlan && !assistant.isGenerating) {
       assistant.generatePlan();
     }
-  }, [assistant.currentStep, assistant.generatedPlan, assistant.isGenerating]);
+  }, [assistant.currentStep, assistant.generatedPlan, assistant.isGenerating, assistant.generatePlan]);
 
   const handleClose = () => {
     assistant.reset();

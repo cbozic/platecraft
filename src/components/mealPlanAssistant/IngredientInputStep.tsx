@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, ShoppingBasket } from 'lucide-react';
+import { Plus, Trash2, ShoppingBasket, Check, X } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import type { IngredientOnHand } from '@/types/mealPlanAssistant';
 import type { MeasurementUnit } from '@/types/units';
@@ -34,12 +34,18 @@ const UNIT_OPTIONS: { value: MeasurementUnit | ''; label: string }[] = [
 export function IngredientInputStep({
   ingredients,
   onAdd,
-  onUpdate: _onUpdate,
+  onUpdate,
   onRemove,
 }: IngredientInputStepProps) {
   const [newQuantity, setNewQuantity] = useState('');
   const [newUnit, setNewUnit] = useState<MeasurementUnit | ''>('');
   const [newName, setNewName] = useState('');
+
+  // Editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editQuantity, setEditQuantity] = useState('');
+  const [editUnit, setEditUnit] = useState<MeasurementUnit | ''>('');
+  const [editName, setEditName] = useState('');
 
   const handleAdd = () => {
     if (!newName.trim()) return;
@@ -59,6 +65,42 @@ export function IngredientInputStep({
     if (e.key === 'Enter') {
       e.preventDefault();
       handleAdd();
+    }
+  };
+
+  const startEditing = (ingredient: IngredientOnHand) => {
+    setEditingId(ingredient.id);
+    setEditQuantity(ingredient.quantity.toString());
+    setEditUnit(ingredient.unit || '');
+    setEditName(ingredient.name);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditQuantity('');
+    setEditUnit('');
+    setEditName('');
+  };
+
+  const saveEditing = () => {
+    if (!editingId || !editName.trim()) return;
+
+    onUpdate(editingId, {
+      name: editName.trim(),
+      quantity: editQuantity ? parseFloat(editQuantity) : 1,
+      unit: editUnit || null,
+    });
+
+    cancelEditing();
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveEditing();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditing();
     }
   };
 
@@ -84,20 +126,81 @@ export function IngredientInputStep({
         <div className={styles.list}>
           {ingredients.map((ingredient) => (
             <div key={ingredient.id} className={styles.ingredientRow}>
-              <div className={styles.ingredientInfo}>
-                <span className={styles.quantity}>
-                  {ingredient.quantity} {formatUnit(ingredient.unit)}
-                </span>
-                <span className={styles.name}>{ingredient.name}</span>
-              </div>
-              <button
-                type="button"
-                className={styles.removeButton}
-                onClick={() => onRemove(ingredient.id)}
-                aria-label={`Remove ${ingredient.name}`}
-              >
-                <Trash2 size={16} />
-              </button>
+              {editingId === ingredient.id ? (
+                // Editing mode
+                <>
+                  <div className={styles.editForm}>
+                    <Input
+                      type="number"
+                      value={editQuantity}
+                      onChange={(e) => setEditQuantity(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
+                      className={styles.editQuantityInput}
+                      min="0"
+                      step="0.25"
+                      autoFocus
+                    />
+                    <select
+                      value={editUnit}
+                      onChange={(e) => setEditUnit(e.target.value as MeasurementUnit | '')}
+                      className={styles.editUnitSelect}
+                    >
+                      {UNIT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
+                      className={styles.editNameInput}
+                    />
+                  </div>
+                  <div className={styles.editActions}>
+                    <button
+                      type="button"
+                      className={styles.saveButton}
+                      onClick={saveEditing}
+                      aria-label="Save changes"
+                    >
+                      <Check size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.cancelButton}
+                      onClick={cancelEditing}
+                      aria-label="Cancel editing"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                // Display mode
+                <>
+                  <button
+                    type="button"
+                    className={styles.ingredientInfo}
+                    onClick={() => startEditing(ingredient)}
+                    aria-label={`Edit ${ingredient.name}`}
+                  >
+                    <span className={styles.quantity}>
+                      {ingredient.quantity} {formatUnit(ingredient.unit)}
+                    </span>
+                    <span className={styles.name}>{ingredient.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.removeButton}
+                    onClick={() => onRemove(ingredient.id)}
+                    aria-label={`Remove ${ingredient.name}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>

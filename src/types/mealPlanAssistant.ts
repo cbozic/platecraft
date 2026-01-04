@@ -114,7 +114,7 @@ export interface RecipeMatchScore {
   ingredientScore: number; // 0-1, how well it matches ingredients
   matchedIngredients: Array<{
     ingredientName: string;
-    matchType: 'exact' | 'partial' | 'fuzzy';
+    matchType: 'exact' | 'partial' | 'contains' | 'fuzzy';
     score: number;
   }>;
   requiredQuantities: Array<{

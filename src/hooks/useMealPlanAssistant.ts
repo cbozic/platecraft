@@ -128,9 +128,15 @@ export function useMealPlanAssistant({
   const goBack = useCallback(() => {
     const prevIndex = currentStepIndex - 1;
     if (prevIndex >= 0) {
+      // Clear the generated plan when going back from preview
+      // This ensures the plan is recalculated when re-entering preview
+      // since previous steps may have been modified
+      if (currentStep === 'preview') {
+        setGeneratedPlan(null);
+      }
       setCurrentStep(STEP_ORDER[prevIndex]);
     }
-  }, [currentStepIndex]);
+  }, [currentStepIndex, currentStep]);
 
   // Ingredient actions
   const addIngredient = useCallback(
