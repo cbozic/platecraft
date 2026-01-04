@@ -54,10 +54,12 @@ export function ShoppingListDetail({
     }))
     .sort((a, b) => a.section.order - b.section.order);
 
-  // Separate checked and unchecked items
+  // Separate checked and unchecked items, sorted alphabetically
   const getDisplayItems = (items: ShoppingItem[]) => {
-    const unchecked = items.filter((i) => !i.isChecked);
-    const checked = items.filter((i) => i.isChecked);
+    const sortAlphabetically = (a: ShoppingItem, b: ShoppingItem) =>
+      a.name.localeCompare(b.name);
+    const unchecked = items.filter((i) => !i.isChecked).sort(sortAlphabetically);
+    const checked = items.filter((i) => i.isChecked).sort(sortAlphabetically);
     return showChecked ? [...unchecked, ...checked] : unchecked;
   };
 
