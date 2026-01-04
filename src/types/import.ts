@@ -121,7 +121,15 @@ Return JSON in this exact format:
     {"name": "ingredient", "quantity": 2, "unit": "cups", "notes": "diced"}
   ],
   "instructions": "Step by step instructions...",
-  "notes": "Any additional notes or tips. Handwritten notes: [any handwritten text found on the recipe]"
+  "notes": "Any additional notes or tips. Handwritten notes: [any handwritten text found on the recipe]",
+  "nutrition": {
+    "calories": 250,
+    "protein": 15,
+    "carbohydrates": 30,
+    "fat": 8,
+    "fiber": 4,
+    "sodium": 400
+  }
 }
 
 For ingredients:
@@ -129,6 +137,17 @@ For ingredients:
 - Include prep notes like "diced", "minced" in the notes field
 - If quantity is "to taste" or not specified, set quantity to null
 - If no unit applies (e.g., "2 eggs"), set unit to "each" or null
+
+For nutrition information:
+- If the recipe includes nutrition facts or nutritional information, extract it into the "nutrition" field
+- calories: total calories (number only, no units)
+- protein: grams of protein (number only)
+- carbohydrates: grams of carbs (number only)
+- fat: grams of fat (number only)
+- fiber: grams of fiber (number only)
+- sodium: milligrams of sodium (number only)
+- If nutrition information is not present in the image, omit the nutrition field entirely
+- Only include nutrition values that are explicitly shown in the image
 
 Extract prep time and cook time if mentioned. If not found, omit those fields.
 If you cannot read part of the recipe clearly, make your best interpretation and note any uncertainty in the notes field.`;
@@ -162,6 +181,23 @@ export function parseClaudeResponse(jsonString: string): RecipeImportResult {
       return { success: false, error: 'Missing or invalid instructions' };
     }
 
+    // Parse nutrition data if present
+    let nutrition: NutritionInfo | undefined = undefined;
+    if (parsed.nutrition && typeof parsed.nutrition === 'object') {
+      const n = parsed.nutrition;
+      // Only include nutrition if at least calories is present
+      if (typeof n.calories === 'number') {
+        nutrition = {
+          calories: n.calories,
+          protein: typeof n.protein === 'number' ? n.protein : 0,
+          carbohydrates: typeof n.carbohydrates === 'number' ? n.carbohydrates : 0,
+          fat: typeof n.fat === 'number' ? n.fat : 0,
+          fiber: typeof n.fiber === 'number' ? n.fiber : 0,
+          sodium: typeof n.sodium === 'number' ? n.sodium : 0,
+        };
+      }
+    }
+
     // Normalize the parsed recipe
     const recipe: ParsedRecipe = {
       title: parsed.title,
@@ -180,6 +216,7 @@ export function parseClaudeResponse(jsonString: string): RecipeImportResult {
       cookTimeMinutes: parsed.cookTimeMinutes || undefined,
       sourceUrl: parsed.sourceUrl || undefined,
       tags: parsed.tags || undefined,
+      nutrition,
     };
 
     return { success: true, recipe };

@@ -1,5 +1,5 @@
 import { settingsRepository } from '@/db';
-import type { ParsedRecipe, RecipeImportResult, MeasurementUnit, StoreSection, RecipeImage } from '@/types';
+import type { ParsedRecipe, RecipeImportResult, MeasurementUnit, StoreSection, RecipeImage, NutritionInfo } from '@/types';
 import { UNIT_INFO } from '@/types/units';
 import { generateManualParsePrompt, parseClaudeResponse, RECIPE_VISION_PROMPT } from '@/types/import';
 import { imageService } from './imageService';
@@ -331,7 +331,7 @@ export const recipeImportService = {
     referenceCookbook: string;
     referencePageNumber: number | null;
     referenceOther: string;
-    nutrition: null;
+    nutrition: NutritionInfo | null;
     images?: RecipeImage[];
   } {
     return {
@@ -354,7 +354,7 @@ export const recipeImportService = {
       referenceCookbook: '',
       referencePageNumber: null,
       referenceOther: '',
-      nutrition: null,
+      nutrition: parsed.nutrition || null,
       images: sourceImages && sourceImages.length > 0 ? sourceImages : undefined,
     };
   },
