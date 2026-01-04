@@ -176,9 +176,73 @@
   --color-border-focus: #166534;
 }
 
+/* Light Fuchsia Theme */
+[data-theme="light-fuchsia"] {
+  --color-primary: #a21caf;
+  --color-primary-hover: #86198f;
+  --color-primary-light: #fae8ff;
+
+  --color-secondary: #6b7280;
+  --color-secondary-hover: #4b5563;
+
+  --color-success: #16a34a;
+  --color-success-light: #dcfce7;
+
+  --color-warning: #ca8a04;
+  --color-warning-light: #fef9c3;
+
+  --color-error: #dc2626;
+  --color-error-light: #fecaca;
+
+  --color-background: #fdf4ff;
+  --color-background-secondary: #fae8ff;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f5d0fe;
+
+  --color-text-primary: #4a044e;
+  --color-text-secondary: #701a75;
+  --color-text-muted: #a21caf;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #f0abfc;
+  --color-border-focus: #a21caf;
+}
+
+/* Dark Forest Theme */
+[data-theme="dark-forest"] {
+  --color-primary: #4ade80;
+  --color-primary-hover: #86efac;
+  --color-primary-light: #14532d;
+
+  --color-secondary: #94a3b8;
+  --color-secondary-hover: #cbd5e1;
+
+  --color-success: #4ade80;
+  --color-success-light: #14532d;
+
+  --color-warning: #fbbf24;
+  --color-warning-light: #713f12;
+
+  --color-error: #f87171;
+  --color-error-light: #7f1d1d;
+
+  --color-background: #052e16;
+  --color-background-secondary: #14532d;
+  --color-surface: #14532d;
+  --color-surface-hover: #166534;
+
+  --color-text-primary: #f0fdf4;
+  --color-text-secondary: #bbf7d0;
+  --color-text-muted: #86efac;
+  --color-text-inverse: #052e16;
+
+  --color-border: #166534;
+  --color-border-focus: #4ade80;
+}
+
 /* System theme preference */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not([data-theme="light-forest"]):not([data-theme="dark"]):not([data-theme="dark-fuchsia"]) {
+  :root:not([data-theme="light"]):not([data-theme="light-forest"]):not([data-theme="light-fuchsia"]):not([data-theme="dark"]):not([data-theme="dark-forest"]):not([data-theme="dark-fuchsia"]) {
     --color-primary: #3b82f6;
     --color-primary-hover: #60a5fa;
     --color-primary-light: #1e3a5f;

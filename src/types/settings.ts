@@ -3,7 +3,7 @@ import type { MealSlot } from './mealPlan';
 import type { StoreSectionInfo } from './shopping';
 import type { AiParsingMode } from './import';
 
-export type Theme = 'light' | 'dark' | 'light-forest' | 'dark-fuchsia' | 'system';
+export type Theme = 'light' | 'dark' | 'light-forest' | 'light-fuchsia' | 'dark-forest' | 'dark-fuchsia' | 'system';
 export type CalendarStartDay = 0 | 1; // 0 = Sunday, 1 = Monday
 export type PhotoImportMode = 'ocr' | 'vision'; // OCR first, or skip straight to vision
 
