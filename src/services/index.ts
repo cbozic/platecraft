@@ -1,5 +1,5 @@
 export { dataService } from './dataService';
-export type { ImportResult } from './dataService';
+export type { ImportResult, ExportOptions } from './dataService';
 export { recipeImportService } from './recipeImportService';
 export { urlScraperService } from './urlScraperService';
 export type { UrlScrapeResult } from './urlScraperService';

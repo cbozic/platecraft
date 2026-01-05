@@ -10,6 +10,19 @@ import { CURRENT_EXPORT_VERSION } from '@/types';
 import { imageService } from './imageService';
 import { cryptoService, type EncryptedExport } from './cryptoService';
 
+export interface ExportOptions {
+  includeImages: boolean;
+  chunked: boolean;
+}
+
+const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
+  includeImages: true,
+  chunked: false,
+};
+
+// Process images in batches of this size to reduce peak memory usage
+const CHUNK_SIZE = 5;
+
 export interface ImportResult {
   success: boolean;
   errors: string[];
@@ -35,8 +48,8 @@ export const dataService = {
    * Share export via Web Share API (iOS Files, AirDrop, iCloud, etc.)
    * Returns true if shared successfully, false if share not supported
    */
-  async shareExport(password?: string): Promise<boolean> {
-    const data = await this.exportAllData();
+  async shareExport(password?: string, options: ExportOptions = DEFAULT_EXPORT_OPTIONS): Promise<boolean> {
+    const data = await this.exportAllData(options);
     const json = JSON.stringify(data, null, 2);
 
     let content: string;
@@ -75,8 +88,9 @@ export const dataService = {
   /**
    * Export all application data as a JSON object
    * Decrypts sensitive fields so export contains plaintext
+   * @param options - Export options (includeImages, chunked)
    */
-  async exportAllData(): Promise<PlatecraftExport> {
+  async exportAllData(options: ExportOptions = DEFAULT_EXPORT_OPTIONS): Promise<PlatecraftExport> {
     const [
       recipes,
       allTags,
@@ -127,21 +141,35 @@ export const dataService = {
     // Only export custom tags (system tags are rebuilt on import)
     const customTags = allTags.filter((tag) => !tag.isSystem);
 
-    // Convert recipe image Blobs to Base64 for JSON serialization
-    const recipesWithBase64Images = await Promise.all(
-      recipes.map(async (recipe) => {
-        if (recipe.images && recipe.images.length > 0) {
-          const imagesWithBase64 = await imageService.prepareImagesForExport(recipe.images);
-          return { ...recipe, images: imagesWithBase64 };
-        }
-        return recipe;
-      })
-    );
+    // Process recipes based on export options
+    let processedRecipes: Recipe[];
+
+    if (!options.includeImages) {
+      // Export without images - strip image data but keep metadata
+      processedRecipes = recipes.map((recipe) => ({
+        ...recipe,
+        images: [], // Remove all images
+      }));
+    } else if (options.chunked) {
+      // Chunked export - process images in batches to reduce peak memory
+      processedRecipes = await this.processRecipesInChunks(recipes);
+    } else {
+      // Standard export - convert all images to Base64 at once
+      processedRecipes = await Promise.all(
+        recipes.map(async (recipe) => {
+          if (recipe.images && recipe.images.length > 0) {
+            const imagesWithBase64 = await imageService.prepareImagesForExport(recipe.images);
+            return { ...recipe, images: imagesWithBase64 };
+          }
+          return recipe;
+        })
+      );
+    }
 
     return {
       version: CURRENT_EXPORT_VERSION,
       exportDate: new Date().toISOString(),
-      recipes: recipesWithBase64Images,
+      recipes: processedRecipes,
       customTags,
       mealPlans: plannedMeals,
       dayNotes,
@@ -153,16 +181,47 @@ export const dataService = {
   },
 
   /**
+   * Process recipes in chunks to reduce peak memory usage.
+   * Converts images to Base64 in small batches, allowing garbage collection between batches.
+   */
+  async processRecipesInChunks(recipes: Recipe[]): Promise<Recipe[]> {
+    const processedRecipes: Recipe[] = [];
+
+    for (let i = 0; i < recipes.length; i += CHUNK_SIZE) {
+      const chunk = recipes.slice(i, i + CHUNK_SIZE);
+
+      // Process this chunk of recipes
+      const processedChunk = await Promise.all(
+        chunk.map(async (recipe) => {
+          if (recipe.images && recipe.images.length > 0) {
+            const imagesWithBase64 = await imageService.prepareImagesForExport(recipe.images);
+            return { ...recipe, images: imagesWithBase64 };
+          }
+          return recipe;
+        })
+      );
+
+      processedRecipes.push(...processedChunk);
+
+      // Yield to the event loop to allow garbage collection and prevent UI freeze
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    return processedRecipes;
+  },
+
+  /**
    * Download export data as a JSON file (unencrypted)
    */
-  async downloadExport(): Promise<void> {
-    const data = await this.exportAllData();
+  async downloadExport(options: ExportOptions = DEFAULT_EXPORT_OPTIONS): Promise<void> {
+    const data = await this.exportAllData(options);
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
 
     const date = new Date().toISOString().split('T')[0];
-    const filename = `platecraft-backup-${date}.json`;
+    const suffix = !options.includeImages ? '-no-images' : '';
+    const filename = `platecraft-backup-${date}${suffix}.json`;
 
     const link = document.createElement('a');
     link.href = url;
@@ -176,8 +235,8 @@ export const dataService = {
   /**
    * Download export data as an encrypted JSON file
    */
-  async downloadEncryptedExport(password: string): Promise<void> {
-    const data = await this.exportAllData();
+  async downloadEncryptedExport(password: string, options: ExportOptions = DEFAULT_EXPORT_OPTIONS): Promise<void> {
+    const data = await this.exportAllData(options);
     const json = JSON.stringify(data, null, 2);
 
     // Encrypt the entire JSON with the user's password
@@ -187,7 +246,8 @@ export const dataService = {
     const url = URL.createObjectURL(blob);
 
     const date = new Date().toISOString().split('T')[0];
-    const filename = `platecraft-backup-${date}.json`;
+    const suffix = !options.includeImages ? '-no-images' : '';
+    const filename = `platecraft-backup-${date}${suffix}.json`;
 
     const link = document.createElement('a');
     link.href = url;

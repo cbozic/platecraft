@@ -3,7 +3,7 @@ import { Download, Upload, Trash2, AlertTriangle, CheckCircle, XCircle, Eye, Eye
 import { Button, Card, CardHeader, CardBody, Modal, ModalFooter, Input } from '@/components/ui';
 import { TagManager, CalendarSettings, StapleIngredientsManager } from '@/components/settings';
 import { settingsRepository } from '@/db';
-import { dataService, type ImportResult } from '@/services';
+import { dataService, type ImportResult, type ExportOptions } from '@/services';
 import type { UserSettings, Theme, UnitSystem, CalendarStartDay, PlatecraftExport, PhotoImportMode, EncryptedExport } from '@/types';
 import styles from './SettingsPage.module.css';
 
@@ -51,6 +51,9 @@ export function SettingsPage() {
   const [showExportPassword, setShowExportPassword] = useState(false);
   const [exportPasswordError, setExportPasswordError] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(false);
+
+  // Export mode state: 'standard' | 'chunked' | 'no-images'
+  const [exportMode, setExportMode] = useState<'standard' | 'chunked' | 'no-images'>('chunked');
 
   // Import decryption state
   const [importPasswordModalOpen, setImportPasswordModalOpen] = useState(false);
@@ -176,10 +179,16 @@ export function SettingsPage() {
     setIsExporting(true);
     setExportPasswordError(null);
 
+    // Build export options from export mode
+    const exportOptions: ExportOptions = {
+      includeImages: exportMode !== 'no-images',
+      chunked: exportMode === 'chunked',
+    };
+
     try {
       if (useShare && canShare) {
         // Try Web Share API first (iOS Files, AirDrop, iCloud, etc.)
-        const shared = await dataService.shareExport(exportPassword);
+        const shared = await dataService.shareExport(exportPassword, exportOptions);
         if (shared) {
           setExportPasswordModalOpen(false);
           setExportPassword('');
@@ -189,7 +198,7 @@ export function SettingsPage() {
         // If share was cancelled or failed, don't fall back automatically
       } else {
         // Use traditional download
-        await dataService.downloadEncryptedExport(exportPassword);
+        await dataService.downloadEncryptedExport(exportPassword, exportOptions);
         setExportPasswordModalOpen(false);
         setExportPassword('');
         setExportPasswordConfirm('');
@@ -891,6 +900,51 @@ export function SettingsPage() {
               <span>{exportPasswordError}</span>
             </div>
           )}
+
+          <div className={styles.exportModeSection}>
+            <label className={styles.exportModeLabel}>Export Mode</label>
+            <div className={styles.exportModeOptions}>
+              <label className={styles.exportModeOption}>
+                <input
+                  type="radio"
+                  name="exportMode"
+                  value="chunked"
+                  checked={exportMode === 'chunked'}
+                  onChange={() => setExportMode('chunked')}
+                />
+                <div>
+                  <span className={styles.exportModeTitle}>Full backup (recommended)</span>
+                  <span className={styles.exportModeDesc}>Includes images, optimized for large collections</span>
+                </div>
+              </label>
+              <label className={styles.exportModeOption}>
+                <input
+                  type="radio"
+                  name="exportMode"
+                  value="no-images"
+                  checked={exportMode === 'no-images'}
+                  onChange={() => setExportMode('no-images')}
+                />
+                <div>
+                  <span className={styles.exportModeTitle}>Without images</span>
+                  <span className={styles.exportModeDesc}>Smaller file, recipes only (no photos)</span>
+                </div>
+              </label>
+              <label className={styles.exportModeOption}>
+                <input
+                  type="radio"
+                  name="exportMode"
+                  value="standard"
+                  checked={exportMode === 'standard'}
+                  onChange={() => setExportMode('standard')}
+                />
+                <div>
+                  <span className={styles.exportModeTitle}>Standard</span>
+                  <span className={styles.exportModeDesc}>Original method (may fail with many images)</span>
+                </div>
+              </label>
+            </div>
+          </div>
 
           <div className={styles.passwordField}>
             <label htmlFor="export-password">Password</label>
