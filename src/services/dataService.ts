@@ -49,21 +49,43 @@ export const dataService = {
    * Returns true if shared successfully, false if share not supported
    */
   async shareExport(password?: string, options: ExportOptions = DEFAULT_EXPORT_OPTIONS): Promise<boolean> {
-    const data = await this.exportAllData(options);
-    const json = JSON.stringify(data, null, 2);
-
-    let content: string;
-    if (password) {
-      const encrypted = await cryptoService.encryptExport(json, password);
-      content = JSON.stringify(encrypted, null, 2);
-    } else {
-      content = json;
-    }
-
+    let file: File;
     const date = new Date().toISOString().split('T')[0];
-    const file = new File([content], `platecraft-backup-${date}.json`, {
-      type: 'application/json',
-    });
+    const suffix = !options.includeImages ? '-no-images' : '';
+
+    if (options.chunked && options.includeImages) {
+      // Use streaming export for chunked mode with images
+      const blob = await this.streamExportToBlob(options);
+
+      if (password) {
+        // For encryption, we need to read the blob as text
+        const json = await blob.text();
+        const encrypted = await cryptoService.encryptExport(json, password);
+        file = new File([JSON.stringify(encrypted)], `platecraft-backup-${date}${suffix}.json`, {
+          type: 'application/json',
+        });
+      } else {
+        file = new File([blob], `platecraft-backup-${date}${suffix}.json`, {
+          type: 'application/json',
+        });
+      }
+    } else {
+      // Use standard export for non-chunked or no-images mode
+      const data = await this.exportAllData(options);
+      const json = JSON.stringify(data);
+
+      let content: string;
+      if (password) {
+        const encrypted = await cryptoService.encryptExport(json, password);
+        content = JSON.stringify(encrypted);
+      } else {
+        content = json;
+      }
+
+      file = new File([content], `platecraft-backup-${date}${suffix}.json`, {
+        type: 'application/json',
+      });
+    }
 
     // Check if the browser can share this file
     if (navigator.canShare?.({ files: [file] })) {
@@ -211,14 +233,129 @@ export const dataService = {
   },
 
   /**
+   * Stream export data to a Blob, processing one recipe at a time to minimize memory usage.
+   * This builds the JSON incrementally without holding all data in memory at once.
+   */
+  async streamExportToBlob(options: ExportOptions = DEFAULT_EXPORT_OPTIONS): Promise<Blob> {
+    // Get all non-recipe data first (this is small)
+    const [
+      recipes,
+      allTags,
+      plannedMeals,
+      dayNotes,
+      recurringMeals,
+      shoppingLists,
+      rawSettings,
+      rawExternalCalendars,
+    ] = await Promise.all([
+      recipeRepository.getAll(),
+      tagRepository.getAll(),
+      db.plannedMeals.toArray(),
+      db.dayNotes.toArray(),
+      db.recurringMeals.toArray(),
+      shoppingRepository.getAllLists(),
+      settingsRepository.get(),
+      db.externalCalendars.toArray(),
+    ]);
+
+    // Decrypt settings
+    const settings = { ...rawSettings };
+    if (settings.anthropicApiKey) {
+      settings.anthropicApiKey = await settingsRepository.getAnthropicApiKey();
+    }
+    if (settings.usdaApiKey) {
+      settings.usdaApiKey = await settingsRepository.getUsdaApiKey();
+    }
+
+    // Decrypt calendar URLs
+    const externalCalendars = await Promise.all(
+      rawExternalCalendars.map(async (calendar): Promise<ExternalCalendar> => {
+        if (calendar.icalUrl) {
+          try {
+            const parsed = JSON.parse(calendar.icalUrl);
+            if (cryptoService.isEncryptedField(parsed)) {
+              const decryptedUrl = await cryptoService.decryptField(parsed);
+              return { ...calendar, icalUrl: decryptedUrl };
+            }
+          } catch {
+            // Not encrypted, use as-is
+          }
+        }
+        return calendar;
+      })
+    );
+
+    const customTags = allTags.filter((tag) => !tag.isSystem);
+
+    // Build JSON parts array - this is more memory efficient than concatenating strings
+    const parts: string[] = [];
+
+    // Start the JSON object
+    parts.push(`{"version":${JSON.stringify(CURRENT_EXPORT_VERSION)},`);
+    parts.push(`"exportDate":${JSON.stringify(new Date().toISOString())},`);
+
+    // Stream recipes array - process ONE recipe at a time
+    parts.push('"recipes":[');
+
+    for (let i = 0; i < recipes.length; i++) {
+      const recipe = recipes[i];
+      let processedRecipe: Recipe;
+
+      if (!options.includeImages) {
+        processedRecipe = { ...recipe, images: [] };
+      } else if (recipe.images && recipe.images.length > 0) {
+        // Convert this recipe's images to Base64
+        const imagesWithBase64 = await imageService.prepareImagesForExport(recipe.images);
+        processedRecipe = { ...recipe, images: imagesWithBase64 };
+      } else {
+        processedRecipe = recipe;
+      }
+
+      // Stringify this single recipe (no pretty printing to save memory)
+      parts.push(JSON.stringify(processedRecipe));
+      if (i < recipes.length - 1) {
+        parts.push(',');
+      }
+
+      // Yield every recipe to allow GC
+      if (i % 3 === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+
+    parts.push('],');
+
+    // Add remaining data (these are small)
+    parts.push(`"customTags":${JSON.stringify(customTags)},`);
+    parts.push(`"mealPlans":${JSON.stringify(plannedMeals)},`);
+    parts.push(`"dayNotes":${JSON.stringify(dayNotes)},`);
+    parts.push(`"recurringMeals":${JSON.stringify(recurringMeals)},`);
+    parts.push(`"shoppingLists":${JSON.stringify(shoppingLists)},`);
+    parts.push(`"settings":${JSON.stringify(settings)},`);
+    parts.push(`"externalCalendars":${JSON.stringify(externalCalendars)}`);
+    parts.push('}');
+
+    // Create Blob from parts array - browser can handle this more efficiently
+    // than a single massive string
+    return new Blob(parts, { type: 'application/json' });
+  },
+
+  /**
    * Download export data as a JSON file (unencrypted)
    */
   async downloadExport(options: ExportOptions = DEFAULT_EXPORT_OPTIONS): Promise<void> {
-    const data = await this.exportAllData(options);
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    let blob: Blob;
 
+    if (options.chunked && options.includeImages) {
+      // Use streaming export for chunked mode with images
+      blob = await this.streamExportToBlob(options);
+    } else {
+      const data = await this.exportAllData(options);
+      const json = JSON.stringify(data);
+      blob = new Blob([json], { type: 'application/json' });
+    }
+
+    const url = URL.createObjectURL(blob);
     const date = new Date().toISOString().split('T')[0];
     const suffix = !options.includeImages ? '-no-images' : '';
     const filename = `platecraft-backup-${date}${suffix}.json`;
@@ -236,15 +373,23 @@ export const dataService = {
    * Download export data as an encrypted JSON file
    */
   async downloadEncryptedExport(password: string, options: ExportOptions = DEFAULT_EXPORT_OPTIONS): Promise<void> {
-    const data = await this.exportAllData(options);
-    const json = JSON.stringify(data, null, 2);
+    let blob: Blob;
 
-    // Encrypt the entire JSON with the user's password
-    const encrypted = await cryptoService.encryptExport(json, password);
+    if (options.chunked && options.includeImages) {
+      // Use streaming export for chunked mode with images
+      const exportBlob = await this.streamExportToBlob(options);
+      // For encryption, we need to read the blob as text
+      const json = await exportBlob.text();
+      const encrypted = await cryptoService.encryptExport(json, password);
+      blob = new Blob([JSON.stringify(encrypted)], { type: 'application/json' });
+    } else {
+      const data = await this.exportAllData(options);
+      const json = JSON.stringify(data);
+      const encrypted = await cryptoService.encryptExport(json, password);
+      blob = new Blob([JSON.stringify(encrypted)], { type: 'application/json' });
+    }
 
-    const blob = new Blob([JSON.stringify(encrypted, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-
     const date = new Date().toISOString().split('T')[0];
     const suffix = !options.includeImages ? '-no-images' : '';
     const filename = `platecraft-backup-${date}${suffix}.json`;
