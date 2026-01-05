@@ -775,7 +775,7 @@ export function PhotoImportTab() {
               Selected tags persist between imports for batch importing from the same source.
             </p>
             <div className={styles.tagList}>
-              {availableTags.map((tag) => (
+              {[...availableTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => (
                 <button
                   key={tag.id}
                   type="button"
