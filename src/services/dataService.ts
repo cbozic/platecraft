@@ -13,11 +13,13 @@ import { cryptoService, type EncryptedExport } from './cryptoService';
 export interface ExportOptions {
   includeImages: boolean;
   chunked: boolean;
+  excludeSensitiveData: boolean;
 }
 
 const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   includeImages: true,
   chunked: false,
+  excludeSensitiveData: false,
 };
 
 // Process images in batches of this size to reduce peak memory usage
@@ -133,18 +135,29 @@ export const dataService = {
       db.externalCalendars.toArray(),
     ]);
 
-    // Decrypt API keys from settings (they're stored encrypted)
+    // Handle settings - decrypt or exclude sensitive data
     const settings = { ...rawSettings };
-    if (settings.anthropicApiKey) {
-      settings.anthropicApiKey = await settingsRepository.getAnthropicApiKey();
-    }
-    if (settings.usdaApiKey) {
-      settings.usdaApiKey = await settingsRepository.getUsdaApiKey();
+    if (options.excludeSensitiveData) {
+      // Remove sensitive fields
+      settings.anthropicApiKey = undefined;
+      settings.usdaApiKey = undefined;
+    } else {
+      // Decrypt API keys
+      if (settings.anthropicApiKey) {
+        settings.anthropicApiKey = await settingsRepository.getAnthropicApiKey();
+      }
+      if (settings.usdaApiKey) {
+        settings.usdaApiKey = await settingsRepository.getUsdaApiKey();
+      }
     }
 
-    // Decrypt calendar URLs
+    // Handle calendar URLs - decrypt or exclude sensitive data
     const externalCalendars = await Promise.all(
       rawExternalCalendars.map(async (calendar): Promise<ExternalCalendar> => {
+        if (options.excludeSensitiveData) {
+          // Remove sensitive URL but keep calendar metadata
+          return { ...calendar, icalUrl: undefined };
+        }
         if (calendar.icalUrl) {
           try {
             const parsed = JSON.parse(calendar.icalUrl);
@@ -258,18 +271,29 @@ export const dataService = {
       db.externalCalendars.toArray(),
     ]);
 
-    // Decrypt settings
+    // Handle settings - decrypt or exclude sensitive data
     const settings = { ...rawSettings };
-    if (settings.anthropicApiKey) {
-      settings.anthropicApiKey = await settingsRepository.getAnthropicApiKey();
-    }
-    if (settings.usdaApiKey) {
-      settings.usdaApiKey = await settingsRepository.getUsdaApiKey();
+    if (options.excludeSensitiveData) {
+      // Remove sensitive fields
+      settings.anthropicApiKey = undefined;
+      settings.usdaApiKey = undefined;
+    } else {
+      // Decrypt API keys
+      if (settings.anthropicApiKey) {
+        settings.anthropicApiKey = await settingsRepository.getAnthropicApiKey();
+      }
+      if (settings.usdaApiKey) {
+        settings.usdaApiKey = await settingsRepository.getUsdaApiKey();
+      }
     }
 
-    // Decrypt calendar URLs
+    // Handle calendar URLs - decrypt or exclude sensitive data
     const externalCalendars = await Promise.all(
       rawExternalCalendars.map(async (calendar): Promise<ExternalCalendar> => {
+        if (options.excludeSensitiveData) {
+          // Remove sensitive URL but keep calendar metadata
+          return { ...calendar, icalUrl: undefined };
+        }
         if (calendar.icalUrl) {
           try {
             const parsed = JSON.parse(calendar.icalUrl);

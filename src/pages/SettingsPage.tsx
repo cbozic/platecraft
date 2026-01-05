@@ -55,6 +55,10 @@ export function SettingsPage() {
   // Export mode state: 'standard' | 'chunked' | 'no-images'
   const [exportMode, setExportMode] = useState<'standard' | 'chunked' | 'no-images'>('chunked');
 
+  // Export encryption and sensitive data options
+  const [encryptExport, setEncryptExport] = useState(true);
+  const [excludeSensitiveData, setExcludeSensitiveData] = useState(false);
+
   // Import decryption state
   const [importPasswordModalOpen, setImportPasswordModalOpen] = useState(false);
   const [importPassword, setImportPassword] = useState('');
@@ -164,16 +168,18 @@ export function SettingsPage() {
     setExportPasswordModalOpen(true);
   };
 
-  const handleExportWithPassword = async (useShare: boolean = false) => {
-    // Validate passwords match
-    if (exportPassword !== exportPasswordConfirm) {
-      setExportPasswordError('Passwords do not match');
-      return;
-    }
+  const handleExport = async (useShare: boolean = false) => {
+    // Validate passwords if encrypting
+    if (encryptExport) {
+      if (exportPassword !== exportPasswordConfirm) {
+        setExportPasswordError('Passwords do not match');
+        return;
+      }
 
-    if (exportPassword.length < 4) {
-      setExportPasswordError('Password must be at least 4 characters');
-      return;
+      if (exportPassword.length < 4) {
+        setExportPasswordError('Password must be at least 4 characters');
+        return;
+      }
     }
 
     setIsExporting(true);
@@ -183,12 +189,14 @@ export function SettingsPage() {
     const exportOptions: ExportOptions = {
       includeImages: exportMode !== 'no-images',
       chunked: exportMode === 'chunked',
+      excludeSensitiveData: !encryptExport && excludeSensitiveData,
     };
 
     try {
       if (useShare && canShare) {
         // Try Web Share API first (iOS Files, AirDrop, iCloud, etc.)
-        const shared = await dataService.shareExport(exportPassword, exportOptions);
+        const password = encryptExport ? exportPassword : undefined;
+        const shared = await dataService.shareExport(password, exportOptions);
         if (shared) {
           setExportPasswordModalOpen(false);
           setExportPassword('');
@@ -198,7 +206,11 @@ export function SettingsPage() {
         // If share was cancelled or failed, don't fall back automatically
       } else {
         // Use traditional download
-        await dataService.downloadEncryptedExport(exportPassword, exportOptions);
+        if (encryptExport) {
+          await dataService.downloadEncryptedExport(exportPassword, exportOptions);
+        } else {
+          await dataService.downloadExport(exportOptions);
+        }
         setExportPasswordModalOpen(false);
         setExportPassword('');
         setExportPasswordConfirm('');
@@ -878,22 +890,14 @@ export function SettingsPage() {
         </div>
       </Modal>
 
-      {/* Export Password Modal */}
+      {/* Export Modal */}
       <Modal
         isOpen={exportPasswordModalOpen}
         onClose={handleExportClose}
-        title="Encrypt Backup"
+        title="Export Backup"
         size="sm"
       >
         <div className={styles.passwordModal}>
-          <div className={styles.passwordInfo}>
-            <Lock size={24} />
-            <p>
-              Your backup will be encrypted with a password. You'll need this password to import
-              the backup later.
-            </p>
-          </div>
-
           {exportPasswordError && (
             <div className={styles.passwordError}>
               <XCircle size={16} />
@@ -930,54 +934,97 @@ export function SettingsPage() {
                   <span className={styles.exportModeDesc}>Smaller file, recipes only (no photos)</span>
                 </div>
               </label>
+            </div>
+          </div>
+
+          <div className={styles.exportModeSection}>
+            <label className={styles.exportModeLabel}>Security</label>
+            <div className={styles.exportModeOptions}>
               <label className={styles.exportModeOption}>
                 <input
                   type="radio"
-                  name="exportMode"
-                  value="standard"
-                  checked={exportMode === 'standard'}
-                  onChange={() => setExportMode('standard')}
+                  name="encryptExport"
+                  checked={encryptExport}
+                  onChange={() => setEncryptExport(true)}
                 />
                 <div>
-                  <span className={styles.exportModeTitle}>Standard</span>
-                  <span className={styles.exportModeDesc}>Original method (may fail with many images)</span>
+                  <span className={styles.exportModeTitle}>Encrypted (password protected)</span>
+                  <span className={styles.exportModeDesc}>Secure, but may fail with very large collections</span>
+                </div>
+              </label>
+              <label className={styles.exportModeOption}>
+                <input
+                  type="radio"
+                  name="encryptExport"
+                  checked={!encryptExport}
+                  onChange={() => setEncryptExport(false)}
+                />
+                <div>
+                  <span className={styles.exportModeTitle}>Unencrypted</span>
+                  <span className={styles.exportModeDesc}>Works with any size, but file is not password protected</span>
                 </div>
               </label>
             </div>
           </div>
 
-          <div className={styles.passwordField}>
-            <label htmlFor="export-password">Password</label>
-            <div className={styles.passwordInputWrapper}>
-              <Input
-                id="export-password"
-                type={showExportPassword ? 'text' : 'password'}
-                value={exportPassword}
-                onChange={(e) => setExportPassword(e.target.value)}
-                placeholder="Enter password"
-              />
-              <button
-                type="button"
-                className={styles.passwordToggle}
-                onClick={() => setShowExportPassword(!showExportPassword)}
-              >
-                {showExportPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+          {encryptExport ? (
+            <>
+              <div className={styles.passwordInfo}>
+                <Lock size={24} />
+                <p>
+                  Your backup will be encrypted with a password. You'll need this password to import
+                  the backup later.
+                </p>
+              </div>
 
-          <div className={styles.passwordField}>
-            <label htmlFor="export-password-confirm">Confirm Password</label>
-            <div className={styles.passwordInputWrapper}>
-              <Input
-                id="export-password-confirm"
-                type={showExportPassword ? 'text' : 'password'}
-                value={exportPasswordConfirm}
-                onChange={(e) => setExportPasswordConfirm(e.target.value)}
-                placeholder="Confirm password"
-              />
+              <div className={styles.passwordField}>
+                <label htmlFor="export-password">Password</label>
+                <div className={styles.passwordInputWrapper}>
+                  <Input
+                    id="export-password"
+                    type={showExportPassword ? 'text' : 'password'}
+                    value={exportPassword}
+                    onChange={(e) => setExportPassword(e.target.value)}
+                    placeholder="Enter password"
+                  />
+                  <button
+                    type="button"
+                    className={styles.passwordToggle}
+                    onClick={() => setShowExportPassword(!showExportPassword)}
+                  >
+                    {showExportPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.passwordField}>
+                <label htmlFor="export-password-confirm">Confirm Password</label>
+                <div className={styles.passwordInputWrapper}>
+                  <Input
+                    id="export-password-confirm"
+                    type={showExportPassword ? 'text' : 'password'}
+                    value={exportPasswordConfirm}
+                    onChange={(e) => setExportPasswordConfirm(e.target.value)}
+                    placeholder="Confirm password"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className={styles.exportModeSection}>
+              <label className={styles.sensitiveDataOption}>
+                <input
+                  type="checkbox"
+                  checked={excludeSensitiveData}
+                  onChange={(e) => setExcludeSensitiveData(e.target.checked)}
+                />
+                <div>
+                  <span className={styles.exportModeTitle}>Exclude sensitive data</span>
+                  <span className={styles.exportModeDesc}>Remove API keys and private calendar URLs from export</span>
+                </div>
+              </label>
             </div>
-          </div>
+          )}
 
           <ModalFooter>
             <Button variant="outline" onClick={handleExportClose}>
@@ -987,16 +1034,16 @@ export function SettingsPage() {
               <Button
                 variant="outline"
                 leftIcon={<Share2 size={16} />}
-                onClick={() => handleExportWithPassword(true)}
-                disabled={isExporting || !exportPassword || !exportPasswordConfirm}
+                onClick={() => handleExport(true)}
+                disabled={isExporting || (encryptExport && (!exportPassword || !exportPasswordConfirm))}
               >
                 {isExporting ? 'Sharing...' : 'Share'}
               </Button>
             )}
             <Button
               leftIcon={<Download size={16} />}
-              onClick={() => handleExportWithPassword(false)}
-              disabled={isExporting || !exportPassword || !exportPasswordConfirm}
+              onClick={() => handleExport(false)}
+              disabled={isExporting || (encryptExport && (!exportPassword || !exportPasswordConfirm))}
             >
               {isExporting ? 'Saving...' : 'Save'}
             </Button>
