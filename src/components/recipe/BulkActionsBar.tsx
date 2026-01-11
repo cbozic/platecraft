@@ -1,4 +1,4 @@
-import { X, Tag, Trash2 } from 'lucide-react';
+import { X, Tag, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui';
 import styles from './BulkActionsBar.module.css';
 
@@ -6,6 +6,7 @@ interface BulkActionsBarProps {
   selectedCount: number;
   onAddTags: () => void;
   onRemoveTags: () => void;
+  onReprocess: () => void;
   onDelete: () => void;
   onClearSelection: () => void;
 }
@@ -14,6 +15,7 @@ export function BulkActionsBar({
   selectedCount,
   onAddTags,
   onRemoveTags,
+  onReprocess,
   onDelete,
   onClearSelection,
 }: BulkActionsBarProps) {
@@ -31,6 +33,9 @@ export function BulkActionsBar({
         </Button>
         <Button variant="outline" size="sm" leftIcon={<Tag size={16} />} onClick={onRemoveTags}>
           Remove Tags
+        </Button>
+        <Button variant="outline" size="sm" leftIcon={<RefreshCw size={16} />} onClick={onReprocess}>
+          Reprocess
         </Button>
         <Button variant="danger" size="sm" leftIcon={<Trash2 size={16} />} onClick={onDelete}>
           Delete

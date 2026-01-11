@@ -13,3 +13,4 @@ export type { SortConfig, SortColumn, SortDirection } from './RecipeTableView';
 export { TagEditPopup } from './TagEditPopup';
 export { BulkActionsBar } from './BulkActionsBar';
 export { BulkTagModal } from './BulkTagModal';
+export { ReprocessModal } from './ReprocessModal';

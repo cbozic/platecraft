@@ -2,6 +2,7 @@
  * Types for recipe import functionality
  */
 import type { NutritionInfo } from './recipe';
+import type { ReprocessableField, ExtractedData } from './reprocessing';
 
 /**
  * A parsed ingredient from imported recipe text
@@ -151,6 +152,101 @@ For nutrition information:
 
 Extract prep time and cook time if mentioned. If not found, omit those fields.
 If you cannot read part of the recipe clearly, make your best interpretation and note any uncertainty in the notes field.`;
+
+/**
+ * Generate a targeted prompt for reprocessing specific missing fields only
+ */
+export function generateReprocessingVisionPrompt(missingFields: ReprocessableField[]): string {
+  const fieldInstructions: Record<ReprocessableField, string> = {
+    nutrition: `Extract nutrition information if visible:
+- calories: total calories (number only)
+- protein: grams of protein (number only)
+- carbohydrates: grams of carbs (number only)
+- fat: grams of fat (number only)
+- fiber: grams of fiber (number only)
+- sodium: milligrams of sodium (number only)`,
+    prepTimeMinutes: 'Extract prep time in minutes if mentioned (number only)',
+    cookTimeMinutes: 'Extract cook time in minutes if mentioned (number only)',
+    description: 'Extract or generate a brief description of the recipe (1-2 sentences)',
+  };
+
+  const instructions = missingFields.map((field) => fieldInstructions[field]).join('\n\n');
+
+  const exampleFields: string[] = [];
+  if (missingFields.includes('nutrition')) {
+    exampleFields.push(
+      '"nutrition": { "calories": 250, "protein": 15, "carbohydrates": 30, "fat": 8, "fiber": 4, "sodium": 400 }'
+    );
+  }
+  if (missingFields.includes('prepTimeMinutes')) {
+    exampleFields.push('"prepTimeMinutes": 15');
+  }
+  if (missingFields.includes('cookTimeMinutes')) {
+    exampleFields.push('"cookTimeMinutes": 30');
+  }
+  if (missingFields.includes('description')) {
+    exampleFields.push('"description": "A delicious recipe..."');
+  }
+
+  return `Look at this recipe image and extract ONLY the following specific information:
+
+${instructions}
+
+Return ONLY valid JSON with no markdown code blocks. Only include fields you can confidently extract:
+{
+  ${exampleFields.join(',\n  ')}
+}
+
+If you cannot find or confidently extract a value, omit that field from the response.`;
+}
+
+/**
+ * Parse the response from a reprocessing Vision call
+ */
+export function parseReprocessingResponse(jsonString: string): ExtractedData | null {
+  try {
+    let cleanJson = jsonString.trim();
+
+    // Remove markdown code blocks if present
+    const jsonMatch = cleanJson.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      cleanJson = jsonMatch[1].trim();
+    }
+
+    const parsed = JSON.parse(cleanJson);
+    const result: ExtractedData = {};
+
+    if (typeof parsed.prepTimeMinutes === 'number') {
+      result.prepTimeMinutes = parsed.prepTimeMinutes;
+    }
+
+    if (typeof parsed.cookTimeMinutes === 'number') {
+      result.cookTimeMinutes = parsed.cookTimeMinutes;
+    }
+
+    if (typeof parsed.description === 'string' && parsed.description.trim()) {
+      result.description = parsed.description.trim();
+    }
+
+    if (parsed.nutrition && typeof parsed.nutrition === 'object') {
+      const n = parsed.nutrition;
+      if (typeof n.calories === 'number') {
+        result.nutrition = {
+          calories: n.calories,
+          protein: typeof n.protein === 'number' ? n.protein : 0,
+          carbohydrates: typeof n.carbohydrates === 'number' ? n.carbohydrates : 0,
+          fat: typeof n.fat === 'number' ? n.fat : 0,
+          fiber: typeof n.fiber === 'number' ? n.fiber : 0,
+          sodium: typeof n.sodium === 'number' ? n.sodium : 0,
+        };
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Validate and parse a JSON response from Claude

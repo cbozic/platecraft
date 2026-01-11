@@ -11,6 +11,7 @@ import {
   RecipeTableView,
   BulkActionsBar,
   BulkTagModal,
+  ReprocessModal,
 } from '@/components/recipe';
 import type { RecipeFilters, SortConfig } from '@/components/recipe';
 import { recipeRepository, tagRepository } from '@/db';
@@ -83,6 +84,7 @@ export function RecipesPage() {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
   const [bulkTagMode, setBulkTagMode] = useState<'add' | 'remove'>('add');
+  const [reprocessModalOpen, setReprocessModalOpen] = useState(false);
 
   // Parse filters from URL
   const filters = useMemo(() => parseFiltersFromParams(searchParams), [searchParams]);
@@ -279,6 +281,18 @@ export function RecipesPage() {
     setBulkTagModalOpen(true);
   };
 
+  const handleReprocessComplete = async () => {
+    // Refresh the recipe list to show updated data
+    try {
+      const recipesData = await recipeRepository.getAll();
+      setRecipes(recipesData);
+    } catch (error) {
+      console.error('Failed to refresh recipes:', error);
+    }
+    setSelectedRecipeIds(new Set());
+    setReprocessModalOpen(false);
+  };
+
   const selectedRecipes = useMemo(() => {
     return recipes.filter((r) => selectedRecipeIds.has(r.id));
   }, [recipes, selectedRecipeIds]);
@@ -448,6 +462,7 @@ export function RecipesPage() {
         selectedCount={selectedRecipeIds.size}
         onAddTags={() => openBulkTagModal('add')}
         onRemoveTags={() => openBulkTagModal('remove')}
+        onReprocess={() => setReprocessModalOpen(true)}
         onDelete={handleBulkDelete}
         onClearSelection={() => setSelectedRecipeIds(new Set())}
       />
@@ -459,6 +474,13 @@ export function RecipesPage() {
         selectedRecipes={selectedRecipes}
         allTags={allTags}
         onConfirm={handleBulkTagsChange}
+      />
+
+      <ReprocessModal
+        isOpen={reprocessModalOpen}
+        onClose={() => setReprocessModalOpen(false)}
+        selectedRecipes={selectedRecipes}
+        onComplete={handleReprocessComplete}
       />
     </div>
   );
