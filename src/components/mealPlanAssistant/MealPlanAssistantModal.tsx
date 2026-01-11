@@ -17,6 +17,7 @@ interface MealPlanAssistantModalProps {
   tags: Tag[];
   weekStartsOn?: 0 | 1;
   defaultServings?: number;
+  resumePlan?: boolean;
 }
 
 const STEP_LABELS = {
@@ -36,6 +37,7 @@ export function MealPlanAssistantModal({
   tags,
   weekStartsOn = 0,
   defaultServings = 4,
+  resumePlan = false,
 }: MealPlanAssistantModalProps) {
   const assistant = useMealPlanAssistant({
     mealSlots,
@@ -45,14 +47,17 @@ export function MealPlanAssistantModal({
       onComplete();
       onClose();
     },
+    restoreFromStorage: resumePlan,
   });
 
-  // Reset when modal opens
+  // Reset when modal opens (unless resuming an existing plan)
   useEffect(() => {
-    if (isOpen) {
+    console.log('Modal reset effect:', { isOpen, resumePlan });
+    if (isOpen && !resumePlan) {
+      console.log('Resetting assistant');
       assistant.reset();
     }
-  }, [isOpen]);
+  }, [isOpen, resumePlan]);
 
   // Generate plan when entering preview step
   useEffect(() => {
@@ -166,6 +171,7 @@ export function MealPlanAssistantModal({
                   onLock={assistant.lockMeal}
                   onRegenerate={assistant.generatePlan}
                   getAlternatives={assistant.getAlternativeRecipes}
+                  onSaveState={assistant.saveToStorage}
                 />
               ) : null}
             </>

@@ -9,7 +9,7 @@ import type { Recipe, Tag } from '@/types';
 import styles from './RecipeDetailPage.module.css';
 
 interface LocationState {
-  from?: 'calendar' | 'recipes';
+  from?: 'calendar' | 'recipes' | 'mealPlanAssistant';
   view?: 'month' | 'week';
   date?: string;
   searchQuery?: string;
@@ -94,11 +94,26 @@ export function RecipeDetailPage() {
   const totalTime = (recipe.prepTimeMinutes || 0) + (recipe.cookTimeMinutes || 0);
 
   // Determine back link based on where user came from
-  const backLink = state?.from === 'calendar' ? '/calendar' : '/';
-  const backText = state?.from === 'calendar' ? 'Back to Calendar' : 'Back to Recipes';
+  const getBackInfo = () => {
+    if (state?.from === 'calendar') {
+      return { link: '/calendar', text: 'Back to Calendar' };
+    }
+    if (state?.from === 'mealPlanAssistant') {
+      return { link: '/calendar', text: 'Back to Meal Planner' };
+    }
+    return { link: '/', text: 'Back to Recipes' };
+  };
+  const { link: backLink, text: backText } = getBackInfo();
 
   const handleBackClick = (e: React.MouseEvent) => {
-    if (state?.from === 'calendar' && state.date) {
+    if (state?.from === 'mealPlanAssistant') {
+      e.preventDefault();
+      navigate('/calendar', {
+        state: {
+          openMealPlanAssistant: true,
+        },
+      });
+    } else if (state?.from === 'calendar' && state.date) {
       e.preventDefault();
       navigate('/calendar', {
         state: {

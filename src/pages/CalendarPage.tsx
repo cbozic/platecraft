@@ -24,6 +24,7 @@ const MOBILE_BREAKPOINT = 767;
 interface LocationState {
   view?: 'month' | 'week';
   date?: string;
+  openMealPlanAssistant?: boolean;
 }
 
 export function CalendarPage() {
@@ -64,6 +65,7 @@ export function CalendarPage() {
 
   // Meal plan assistant state
   const [planAssistantOpen, setPlanAssistantOpen] = useState(false);
+  const [resumingPlan, setResumingPlan] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
 
   // Mobile day detail state
@@ -86,12 +88,18 @@ export function CalendarPage() {
 
   // Restore calendar state when navigating back from recipe
   useEffect(() => {
+    console.log('CalendarPage state restoration effect:', { state, openMealPlanAssistant: state?.openMealPlanAssistant });
     if (state?.view) {
       setView(state.view);
     }
     if (state?.date) {
       const restoredDate = new Date(state.date);
       goToDate(restoredDate);
+    }
+    if (state?.openMealPlanAssistant) {
+      console.log('Setting resumingPlan and planAssistantOpen to true');
+      setResumingPlan(true);
+      setPlanAssistantOpen(true);
     }
     // Clear the state after using it
     if (state) {
@@ -436,7 +444,10 @@ export function CalendarPage() {
 
       <MealPlanAssistantModal
         isOpen={planAssistantOpen}
-        onClose={() => setPlanAssistantOpen(false)}
+        onClose={() => {
+          setPlanAssistantOpen(false);
+          setResumingPlan(false);
+        }}
         onComplete={() => {
           // Trigger a refresh of the calendar data
           window.location.reload();
@@ -445,6 +456,7 @@ export function CalendarPage() {
         tags={tags}
         weekStartsOn={weekStartsOn}
         defaultServings={defaultServings}
+        resumePlan={resumingPlan}
       />
     </div>
   );

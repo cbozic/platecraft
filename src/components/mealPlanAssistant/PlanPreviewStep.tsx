@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import {
   CheckCircle,
@@ -8,6 +9,7 @@ import {
   ShoppingBasket,
   AlertTriangle,
   ArrowRightLeft,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import type { GeneratedMealPlan, DayTagRule } from '@/types/mealPlanAssistant';
@@ -22,6 +24,7 @@ interface PlanPreviewStepProps {
   onLock: (mealId: string) => void;
   onRegenerate: () => void;
   getAlternatives: (mealId: string) => Promise<{ id: string; title: string }[]>;
+  onSaveState?: () => void;
 }
 
 const MATCH_TYPE_COLORS = {
@@ -44,7 +47,9 @@ export function PlanPreviewStep({
   onLock,
   onRegenerate,
   getAlternatives,
+  onSaveState,
 }: PlanPreviewStepProps) {
+  const navigate = useNavigate();
   const [swapModalMealId, setSwapModalMealId] = useState<string | null>(null);
 
   // Group meals by date
@@ -167,7 +172,23 @@ export function PlanPreviewStep({
                         {MATCH_TYPE_LABELS[meal.matchType]}
                       </span>
                     </div>
-                    <div className={styles.recipeTitle}>{meal.recipeTitle}</div>
+                    <button
+                      type="button"
+                      className={styles.recipeTitle}
+                      onClick={() => {
+                        // Save state before navigating so we can restore on return
+                        onSaveState?.();
+                        navigate(`/recipes/${meal.recipeId}`, {
+                          state: {
+                            from: 'mealPlanAssistant',
+                          },
+                        });
+                      }}
+                      title="View recipe details"
+                    >
+                      {meal.recipeTitle}
+                      <ExternalLink size={12} className={styles.recipeLinkIcon} />
+                    </button>
                     {meal.matchedIngredients && meal.matchedIngredients.length > 0 && (
                       <div className={styles.matchDetails}>
                         Uses: {meal.matchedIngredients.join(', ')}

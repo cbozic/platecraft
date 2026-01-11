@@ -1,6 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { startOfWeek, endOfWeek } from 'date-fns';
+
+const STORAGE_KEY = 'platecraft-meal-plan-assistant-state';
 import type {
   AssistantStep,
   MealPlanConfig,
@@ -16,6 +18,13 @@ interface UseMealPlanAssistantProps {
   tags: Tag[];
   defaultServings?: number;
   onComplete?: () => void;
+  restoreFromStorage?: boolean;
+}
+
+interface StoredState {
+  currentStep: AssistantStep;
+  config: MealPlanConfig & { startDate: string; endDate: string };
+  generatedPlan: GeneratedMealPlan | null;
 }
 
 export interface UseMealPlanAssistantReturn {
@@ -64,9 +73,36 @@ export interface UseMealPlanAssistantReturn {
 
   // Reset
   reset: () => void;
+
+  // Storage
+  saveToStorage: () => void;
 }
 
 const STEP_ORDER: AssistantStep[] = ['ingredients', 'dayRules', 'dateRange', 'preview'];
+
+function loadStoredState(): StoredState | null {
+  try {
+    const stored = sessionStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error('Failed to load stored meal plan state:', e);
+  }
+  return null;
+}
+
+function clearStoredState(): void {
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+  } catch (e) {
+    console.error('Failed to clear stored meal plan state:', e);
+  }
+}
+
+export function hasStoredMealPlanState(): boolean {
+  return sessionStorage.getItem(STORAGE_KEY) !== null;
+}
 
 function getInitialConfig(defaultServings: number, mealSlots: MealSlot[]): MealPlanConfig {
   const today = new Date();
@@ -87,6 +123,7 @@ export function useMealPlanAssistant({
   tags,
   defaultServings = 4,
   onComplete,
+  restoreFromStorage = false,
 }: UseMealPlanAssistantProps): UseMealPlanAssistantReturn {
   const [currentStep, setCurrentStep] = useState<AssistantStep>('ingredients');
   const [config, setConfig] = useState<MealPlanConfig>(() => getInitialConfig(defaultServings, mealSlots));
@@ -94,6 +131,30 @@ export function useMealPlanAssistant({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasRestored, setHasRestored] = useState(false);
+
+  // Restore state from storage when requested
+  useEffect(() => {
+    console.log('Restore effect:', { restoreFromStorage, hasRestored });
+    if (restoreFromStorage && !hasRestored) {
+      const stored = loadStoredState();
+      console.log('Loaded stored state:', stored);
+      if (stored) {
+        console.log('Restoring meal plan state from storage');
+        setCurrentStep(stored.currentStep);
+        setConfig({
+          ...stored.config,
+          startDate: new Date(stored.config.startDate),
+          endDate: new Date(stored.config.endDate),
+        });
+        setGeneratedPlan(stored.generatedPlan);
+        clearStoredState();
+      } else {
+        console.log('No stored state found');
+      }
+      setHasRestored(true);
+    }
+  }, [restoreFromStorage, hasRestored]);
 
   // Tag name lookup
   const tagNamesById = useMemo(() => {
@@ -364,12 +425,32 @@ export function useMealPlanAssistant({
     }
   }, [generatedPlan, onComplete]);
 
+  // Save to storage (for navigation preservation)
+  const saveToStorage = useCallback(() => {
+    try {
+      const state: StoredState = {
+        currentStep,
+        config: {
+          ...config,
+          startDate: config.startDate.toISOString(),
+          endDate: config.endDate.toISOString(),
+        } as StoredState['config'],
+        generatedPlan,
+      };
+      console.log('Saving meal plan state to storage:', state);
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.error('Failed to save meal plan state:', e);
+    }
+  }, [currentStep, config, generatedPlan]);
+
   // Reset
   const reset = useCallback(() => {
     setCurrentStep('ingredients');
     setConfig(getInitialConfig(defaultServings, mealSlots));
     setGeneratedPlan(null);
     setError(null);
+    clearStoredState();
   }, [defaultServings, mealSlots]);
 
   return {
@@ -401,5 +482,6 @@ export function useMealPlanAssistant({
     getAlternativeRecipes,
     applyPlan,
     reset,
+    saveToStorage,
   };
 }
