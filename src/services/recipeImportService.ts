@@ -318,6 +318,7 @@ export const recipeImportService = {
       name: string;
       quantity: number | null;
       unit: MeasurementUnit | null;
+      preparationNotes?: string;
       isOptional: boolean;
       storeSection: StoreSection;
     }>;
@@ -341,6 +342,7 @@ export const recipeImportService = {
         name: ing.name,
         quantity: ing.quantity ?? null,
         unit: this.validateUnit(ing.unit),
+        preparationNotes: ing.notes || undefined,
         isOptional: false,
         storeSection: this.validateStoreSection(ing.storeSection),
       })),

@@ -106,6 +106,11 @@ export function RecipeFormPage() {
               setReferencePageNumber(imported.referencePageNumber || '');
               setReferenceOther(imported.referenceOther || '');
               setSelectedTags(imported.tags || []);
+              // Restore nutrition data
+              if (imported.nutrition) {
+                setNutrition(imported.nutrition);
+                setHasNutrition(true);
+              }
               // Restore images from base64 to Blobs
               if (imported.images && imported.images.length > 0) {
                 const restoredImages = imageService.restoreImagesFromImport(imported.images);
