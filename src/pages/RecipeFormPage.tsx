@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { Button, Input, Card, CardBody } from '@/components/ui';
 import { ImageGallery, ImageUploader, NutritionLookup, IngredientNutritionCalculator } from '@/components/recipe';
@@ -19,10 +19,16 @@ const emptyIngredient: Omit<Ingredient, 'id'> = {
   storeSection: 'other',
 };
 
+interface LocationState {
+  from?: 'calendar' | 'recipes' | 'mealPlanAssistant';
+}
+
 export function RecipeFormPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as LocationState | null;
   const { triggerAfterImport } = useIOSInstallBanner();
   const isEditing = Boolean(id);
   const isImporting = searchParams.get('imported') === 'true';
@@ -199,7 +205,7 @@ export function RecipeFormPage() {
 
       if (isEditing && id) {
         await recipeRepository.update(id, formData);
-        navigate(`/recipes/${id}`);
+        navigate(`/recipes/${id}`, { state: { from: locationState?.from } });
       } else {
         const newRecipe = await recipeRepository.create(formData);
         triggerAfterImport();
@@ -223,7 +229,11 @@ export function RecipeFormPage() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <Link to={isEditing ? `/recipes/${id}` : '/'} className={styles.backLink}>
+        <Link
+          to={isEditing ? `/recipes/${id}` : '/'}
+          className={styles.backLink}
+          state={isEditing ? { from: locationState?.from } : undefined}
+        >
           <ArrowLeft size={20} />
           <span>Cancel</span>
         </Link>
@@ -610,7 +620,10 @@ export function RecipeFormPage() {
         </Card>
 
         <div className={styles.formActions}>
-          <Link to={isEditing ? `/recipes/${id}` : '/'}>
+          <Link
+            to={isEditing ? `/recipes/${id}` : '/'}
+            state={isEditing ? { from: locationState?.from } : undefined}
+          >
             <Button type="button" variant="outline">
               Cancel
             </Button>

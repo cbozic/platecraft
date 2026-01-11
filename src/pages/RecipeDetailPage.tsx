@@ -148,7 +148,7 @@ export function RecipeDetailPage() {
           >
             <Heart size={20} fill={recipe.isFavorite ? 'currentColor' : 'none'} />
           </Button>
-          <Link to={`/recipes/${recipe.id}/edit`}>
+          <Link to={`/recipes/${recipe.id}/edit`} state={{ from: state?.from }}>
             <Button variant="outline" leftIcon={<Edit size={18} />}>
               Edit
             </Button>
@@ -360,7 +360,7 @@ export function RecipeDetailPage() {
                 <div className={styles.noNutrition}>
                   <Apple size={48} className={styles.noNutritionIcon} />
                   <p>No nutrition information available</p>
-                  <Link to={`/recipes/${recipe.id}/edit`}>
+                  <Link to={`/recipes/${recipe.id}/edit`} state={{ from: state?.from }}>
                     <Button variant="outline" size="sm">
                       Add Nutrition Info
                     </Button>
