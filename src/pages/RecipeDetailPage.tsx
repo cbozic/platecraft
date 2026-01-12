@@ -9,12 +9,13 @@ import type { Recipe, Tag } from '@/types';
 import styles from './RecipeDetailPage.module.css';
 
 interface LocationState {
-  from?: 'calendar' | 'recipes' | 'mealPlanAssistant';
+  from?: 'calendar' | 'recipes' | 'mealPlanAssistant' | 'shopping';
   view?: 'month' | 'week';
   date?: string;
   searchQuery?: string;
   searchParams?: string;
   viewMode?: 'grid' | 'table';
+  listId?: string;
 }
 
 export function RecipeDetailPage() {
@@ -102,6 +103,9 @@ export function RecipeDetailPage() {
     if (state?.from === 'mealPlanAssistant') {
       return { link: '/calendar', text: 'Back to Meal Planner' };
     }
+    if (state?.from === 'shopping') {
+      return { link: '/shopping', text: 'Back to Shopping List' };
+    }
     return { link: '/', text: 'Back to Recipes' };
   };
   const { link: backLink, text: backText } = getBackInfo();
@@ -130,6 +134,13 @@ export function RecipeDetailPage() {
           searchQuery: state.searchQuery,
           searchParams: state.searchParams,
           viewMode: state.viewMode,
+        },
+      });
+    } else if (state?.from === 'shopping' && state.listId) {
+      e.preventDefault();
+      navigate('/shopping', {
+        state: {
+          openListId: state.listId,
         },
       });
     }

@@ -4,7 +4,7 @@ import type { MeasurementUnit } from '@/types/units';
  * Approximate weight in grams for 1 cup of common ingredients
  * Used to convert volume measurements to weight for nutrition calculations
  */
-const GRAMS_PER_CUP: Record<string, number> = {
+export const GRAMS_PER_CUP: Record<string, number> = {
   // Flours & Baking
   'flour': 125,
   'all-purpose flour': 125,
@@ -148,7 +148,7 @@ const GRAMS_PER_CUP: Record<string, number> = {
 /**
  * Weight in grams for count-based units
  */
-const GRAMS_PER_EACH: Record<string, number> = {
+export const GRAMS_PER_EACH: Record<string, number> = {
   'egg': 50,
   'eggs': 50,
   'large egg': 50,
@@ -265,7 +265,7 @@ export function estimateIngredientWeight(
 /**
  * Find the best matching ingredient name in the lookup table
  */
-function findBestMatch(name: string, lookup: Record<string, number>): number {
+export function findBestWeightMatch(name: string, lookup: Record<string, number>): number {
   // Exact match
   if (lookup[name]) {
     return lookup[name];
@@ -295,6 +295,9 @@ function findBestMatch(name: string, lookup: Record<string, number>): number {
 
   return lookup['_default'] || 100;
 }
+
+// Internal alias for backward compatibility
+const findBestMatch = findBestWeightMatch;
 
 /**
  * Format weight for display

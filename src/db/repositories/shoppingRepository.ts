@@ -1,9 +1,31 @@
 import { db } from '../database';
-import type { ShoppingList, ShoppingItem, AggregatedIngredient } from '@/types';
+import type {
+  ShoppingList,
+  ShoppingItem,
+  ShoppingListGenerationResult,
+  PendingIngredientMatch,
+  SourceRecipeDetail,
+  MeasurementUnit,
+  AlternateUnit,
+  OriginalAmount,
+} from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { mealPlanRepository } from './mealPlanRepository';
 import { recipeRepository } from './recipeRepository';
 import { settingsRepository } from './settingsRepository';
+import {
+  ingredientDeduplicationService,
+  type UnitEstimationRequest,
+} from '@/services/ingredientDeduplicationService';
+import {
+  normalizeIngredientName,
+  selectCanonicalName,
+} from '@/services/ingredientNormalizationService';
+import {
+  getUnitCategory,
+  aggregateAmounts,
+  generateAlternateUnits,
+} from '@/utils/unitConversion';
 
 // Helper function to auto-check staple ingredients
 async function applyStapleChecking(items: ShoppingItem[]): Promise<ShoppingItem[]> {
@@ -139,12 +161,23 @@ export const shoppingRepository = {
     await this.updateList(listId, { items: updatedItems });
   },
 
-  // Generate shopping list from planned meals
+  // Generate shopping list from planned meals with intelligent ingredient deduplication
   async generateFromMealPlan(
     name: string,
     startDate: Date,
-    endDate: Date
-  ): Promise<ShoppingList> {
+    endDate: Date,
+    options?: {
+      useAI?: boolean;
+      signal?: AbortSignal;
+      onProgress?: (phase: 'gathering' | 'analyzing') => void;
+    }
+  ): Promise<ShoppingListGenerationResult> {
+    const useAI = options?.useAI ?? true;
+    const { signal, onProgress } = options || {};
+
+    // Notify that we're gathering ingredients
+    onProgress?.('gathering');
+
     // Get all planned meals for the date range
     const meals = await mealPlanRepository.getMealsForDateRange(startDate, endDate);
 
@@ -153,8 +186,18 @@ export const shoppingRepository = {
     const recipes = await recipeRepository.getByIds(recipeIds);
     const recipeMap = new Map(recipes.map((r) => [r.id, r]));
 
-    // Aggregate ingredients from recipes
-    const aggregated = new Map<string, AggregatedIngredient>();
+    // Collect all ingredients with full details for deduplication
+    interface IngredientWithSource {
+      name: string;
+      originalName: string; // Keep original name for sourceRecipeDetails
+      quantity: number | null;
+      unit: MeasurementUnit | null;
+      storeSection: string;
+      recipeId: string;
+      recipeName: string;
+    }
+
+    const allIngredients: IngredientWithSource[] = [];
 
     for (const meal of meals) {
       const recipe = recipeMap.get(meal.recipeId);
@@ -163,49 +206,244 @@ export const shoppingRepository = {
       const servingMultiplier = meal.servings / recipe.servings;
 
       for (const ingredient of recipe.ingredients) {
-        const key = `${ingredient.name.toLowerCase()}-${ingredient.unit || 'each'}`;
-        const existing = aggregated.get(key);
-
         const scaledQuantity = ingredient.quantity
           ? ingredient.quantity * servingMultiplier
           : null;
 
-        if (existing) {
-          existing.totalQuantity =
-            existing.totalQuantity !== null && scaledQuantity !== null
-              ? existing.totalQuantity + scaledQuantity
-              : null;
-          existing.sourceRecipes.push({
-            recipeId: recipe.id,
-            recipeName: recipe.title,
-            quantity: scaledQuantity,
+        allIngredients.push({
+          name: ingredient.name,
+          originalName: ingredient.name,
+          quantity: scaledQuantity,
+          unit: ingredient.unit,
+          storeSection: ingredient.storeSection || 'other',
+          recipeId: recipe.id,
+          recipeName: recipe.title,
+        });
+      }
+    }
+
+    // Get saved ingredient mappings
+    const mappingsMap = await ingredientDeduplicationService.getMappingsMap();
+
+    // Apply saved mappings to get canonical names
+    for (const ing of allIngredients) {
+      const canonical = mappingsMap.get(ing.name.toLowerCase());
+      if (canonical) {
+        ing.name = canonical;
+      }
+    }
+
+    // Step 1: Normalize all ingredient names for better matching
+    interface NormalizedIngredient extends IngredientWithSource {
+      normalizedName: string;
+      displayName: string;
+    }
+
+    const normalizedIngredients: NormalizedIngredient[] = allIngredients.map((ing) => {
+      const normalized = normalizeIngredientName(ing.name);
+      return {
+        ...ing,
+        normalizedName: normalized.normalizedName,
+        displayName: normalized.displayName,
+      };
+    });
+
+    // Step 2: Group by NORMALIZED name only (not unit!) to allow unit merging
+    const groupedByName = new Map<
+      string,
+      {
+        ingredients: NormalizedIngredient[];
+        storeSection: string;
+        originalNames: string[];
+      }
+    >();
+
+    for (const ing of normalizedIngredients) {
+      const key = ing.normalizedName;
+      const existing = groupedByName.get(key);
+
+      if (existing) {
+        existing.ingredients.push(ing);
+        if (!existing.originalNames.includes(ing.originalName)) {
+          existing.originalNames.push(ing.originalName);
+        }
+      } else {
+        groupedByName.set(key, {
+          ingredients: [ing],
+          storeSection: ing.storeSection,
+          originalNames: [ing.originalName],
+        });
+      }
+    }
+
+    // Step 3: For each group, aggregate amounts with unit conversion
+    interface AggregatedItem {
+      normalizedName: string;
+      displayName: string;
+      quantity: number | null;
+      unit: MeasurementUnit | null;
+      storeSection: string;
+      sourceRecipeDetails: SourceRecipeDetail[];
+      alternateUnits: AlternateUnit[];
+      originalAmounts: OriginalAmount[];
+      isEstimated: boolean;
+      estimationNote?: string;
+      needsEstimation: boolean;
+    }
+
+    const aggregatedItems: AggregatedItem[] = [];
+    const needsEstimation: Array<{
+      normalizedName: string;
+      item: AggregatedItem;
+    }> = [];
+
+    for (const [normalizedName, group] of groupedByName) {
+      // Build amounts array for aggregation
+      const amounts = group.ingredients.map((ing) => ({
+        quantity: ing.quantity,
+        unit: ing.unit,
+        recipeId: ing.recipeId,
+        recipeName: ing.recipeName,
+      }));
+
+      // Select the best display name from the original names
+      const displayName = selectCanonicalName(group.originalNames);
+
+      // Aggregate using unit conversion utilities
+      const aggregated = aggregateAmounts(amounts, normalizedName);
+
+      // Build source recipe details
+      const sourceRecipeDetails: SourceRecipeDetail[] = group.ingredients.map(
+        (ing) => ({
+          recipeId: ing.recipeId,
+          recipeName: ing.recipeName,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          originalIngredientName: ing.originalName,
+        })
+      );
+
+      const item: AggregatedItem = {
+        normalizedName,
+        displayName,
+        quantity: aggregated.displayQuantity,
+        unit: aggregated.displayUnit,
+        storeSection: group.storeSection,
+        sourceRecipeDetails,
+        alternateUnits: aggregated.alternateUnits,
+        originalAmounts: aggregated.originalAmounts,
+        isEstimated: aggregated.isEstimated,
+        estimationNote: aggregated.estimationNote,
+        needsEstimation: aggregated.needsAIEstimation || false,
+      };
+
+      aggregatedItems.push(item);
+
+      if (item.needsEstimation) {
+        needsEstimation.push({ normalizedName, item });
+      }
+    }
+
+    // Step 4: Handle cross-category estimation if needed
+    if (needsEstimation.length > 0 && useAI && !signal?.aborted) {
+      onProgress?.('analyzing');
+
+      // Build estimation requests for items with mixed unit categories
+      const estimationRequests: UnitEstimationRequest[] = [];
+
+      for (const { normalizedName, item } of needsEstimation) {
+        // Find the amounts that need conversion
+        const countAmounts = item.originalAmounts.filter(
+          (a) => a.quantity && getUnitCategory(a.unit) === 'count'
+        );
+        const weightAmounts = item.originalAmounts.filter(
+          (a) => a.quantity && getUnitCategory(a.unit) === 'weight'
+        );
+
+        // If we have count amounts and weight amounts, convert count to weight
+        if (countAmounts.length > 0 && weightAmounts.length > 0) {
+          for (const countAmt of countAmounts) {
+            if (countAmt.quantity) {
+              estimationRequests.push({
+                ingredientName: normalizedName,
+                fromQuantity: countAmt.quantity,
+                fromUnit: countAmt.unit,
+                toCategory: 'weight',
+              });
+            }
+          }
+        }
+        // If we only have count amounts, estimate weight for typical shopping
+        else if (countAmounts.length > 0) {
+          const totalCount = countAmounts.reduce(
+            (sum, a) => sum + (a.quantity || 0),
+            0
+          );
+          estimationRequests.push({
+            ingredientName: normalizedName,
+            fromQuantity: totalCount,
+            fromUnit: 'each',
+            toCategory: 'weight',
           });
-        } else {
-          aggregated.set(key, {
-            name: ingredient.name,
-            totalQuantity: scaledQuantity,
-            unit: ingredient.unit,
-            storeSection: ingredient.storeSection || 'other',
-            sourceRecipes: [
-              {
-                recipeId: recipe.id,
-                recipeName: recipe.title,
-                quantity: scaledQuantity,
-              },
-            ],
-          });
+        }
+      }
+
+      if (estimationRequests.length > 0) {
+        const estimationResults =
+          await ingredientDeduplicationService.estimateUnitConversion(
+            estimationRequests,
+            signal
+          );
+
+        // Apply estimations to items
+        for (const result of estimationResults) {
+          const itemToUpdate = aggregatedItems.find(
+            (i) => i.normalizedName === result.ingredientName
+          );
+          if (itemToUpdate && result.confidence > 0.5) {
+            // Add the estimated weight to existing weight amounts
+            const existingWeightBase =
+              itemToUpdate.originalAmounts
+                .filter((a) => getUnitCategory(a.unit) === 'weight')
+                .reduce((sum, a) => {
+                  if (!a.quantity || !a.unit) return sum;
+                  const info = { lb: 453.592, oz: 28.3495, g: 1, kg: 1000 }[
+                    a.unit as string
+                  ];
+                  return sum + (a.quantity * (info || 0));
+                }, 0) || 0;
+
+            const totalGrams =
+              existingWeightBase + result.estimatedQuantityInGrams;
+            const totalLbs = totalGrams / 453.592;
+
+            itemToUpdate.quantity = Math.round(totalLbs * 100) / 100;
+            itemToUpdate.unit = 'lb';
+            itemToUpdate.isEstimated = true;
+            itemToUpdate.estimationNote = result.displayNote;
+            itemToUpdate.alternateUnits = generateAlternateUnits(
+              itemToUpdate.quantity,
+              'lb',
+              'weight'
+            );
+          }
         }
       }
     }
 
     // Aggregate extra items from meals (side dishes, extras)
-    const extraAggregated = new Map<string, { name: string; quantity: number | null; unit: string | null; storeSection: string }>();
+    const extraAggregated = new Map<
+      string,
+      { name: string; quantity: number | null; unit: string | null; storeSection: string }
+    >();
 
     for (const meal of meals) {
       if (!meal.extraItems || meal.extraItems.length === 0) continue;
 
       for (const extra of meal.extraItems) {
-        const key = `${extra.name.toLowerCase()}-${extra.unit || 'each'}`;
+        // Normalize extra item names too
+        const normalized = normalizeIngredientName(extra.name);
+        const key = normalized.normalizedName;
         const existing = extraAggregated.get(key);
 
         if (existing) {
@@ -215,7 +453,7 @@ export const shoppingRepository = {
               : existing.quantity ?? extra.quantity ?? null;
         } else {
           extraAggregated.set(key, {
-            name: extra.name,
+            name: normalized.displayName || extra.name,
             quantity: extra.quantity ?? null,
             unit: extra.unit ?? null,
             storeSection: extra.storeSection || 'other',
@@ -224,17 +462,22 @@ export const shoppingRepository = {
       }
     }
 
-    // Convert aggregated ingredients to shopping items
-    const items: ShoppingItem[] = Array.from(aggregated.values()).map((agg) => ({
+    // Convert aggregated ingredients to shopping items with all new fields
+    const items: ShoppingItem[] = aggregatedItems.map((agg) => ({
       id: uuidv4(),
-      name: agg.name,
-      quantity: agg.totalQuantity,
+      name: agg.displayName,
+      quantity: agg.quantity,
       unit: agg.unit,
       storeSection: agg.storeSection,
       isChecked: false,
-      sourceRecipeIds: agg.sourceRecipes.map((r) => r.recipeId),
+      sourceRecipeIds: [...new Set(agg.sourceRecipeDetails.map((r) => r.recipeId))],
+      sourceRecipeDetails: agg.sourceRecipeDetails,
       isManual: false,
       isRecurring: false,
+      alternateUnits: agg.alternateUnits.length > 0 ? agg.alternateUnits : undefined,
+      isEstimated: agg.isEstimated || undefined,
+      estimationNote: agg.estimationNote,
+      originalAmounts: agg.originalAmounts.length > 0 ? agg.originalAmounts : undefined,
     }));
 
     // Add extra items (meal extras/side dishes)
@@ -246,7 +489,8 @@ export const shoppingRepository = {
         unit: extra.unit as ShoppingItem['unit'],
         storeSection: extra.storeSection,
         isChecked: false,
-        sourceRecipeIds: [], // Not from a recipe, from meal extras
+        sourceRecipeIds: [],
+        sourceRecipeDetails: [],
         isManual: false,
         isRecurring: false,
       });
@@ -259,7 +503,49 @@ export const shoppingRepository = {
     const list = await this.createList(name, startDate, endDate);
     await this.updateList(list.id, { items: itemsWithStaplesChecked });
 
-    return { ...list, items: itemsWithStaplesChecked };
+    const finalList = { ...list, items: itemsWithStaplesChecked };
+
+    // Check for potential AI matches on unmapped ingredients
+    let pendingMatches: PendingIngredientMatch[] = [];
+    let usedAI = false;
+    let cancelled = false;
+
+    if (useAI && !signal?.aborted && (await ingredientDeduplicationService.isAIAvailable())) {
+      // Find ingredients that weren't mapped (still using original names)
+      const unmappedIngredients = allIngredients.filter(
+        (ing) => !mappingsMap.has(ing.originalName.toLowerCase())
+      );
+
+      if (unmappedIngredients.length >= 2) {
+        // Notify that we're now analyzing with AI
+        onProgress?.('analyzing');
+
+        const result = await ingredientDeduplicationService.identifyPotentialMatches(
+          unmappedIngredients.map((ing) => ({
+            name: ing.originalName,
+            recipeId: ing.recipeId,
+            recipeName: ing.recipeName,
+            quantity: ing.quantity,
+            unit: ing.unit,
+          })),
+          signal
+        );
+
+        if (result.cancelled) {
+          cancelled = true;
+        } else {
+          pendingMatches = result.matches;
+          usedAI = true;
+        }
+      }
+    }
+
+    return {
+      list: finalList,
+      pendingMatches,
+      usedAI,
+      cancelled,
+    };
   },
 
   // Recurring items

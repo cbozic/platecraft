@@ -21,6 +21,7 @@ interface ShoppingListDetailProps {
   onClearChecked: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onNavigateToRecipe?: (recipeId: string) => void;
 }
 
 export function ShoppingListDetail({
@@ -37,6 +38,7 @@ export function ShoppingListDetail({
   onClearChecked,
   onDuplicate,
   onDelete,
+  onNavigateToRecipe,
 }: ShoppingListDetailProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -194,6 +196,7 @@ export function ShoppingListDetail({
                     onToggle={onToggleItem}
                     onUpdate={onUpdateItem}
                     onDelete={onRemoveItem}
+                    onNavigateToRecipe={onNavigateToRecipe}
                   />
                 ))}
               </div>

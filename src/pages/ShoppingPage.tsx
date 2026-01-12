@@ -1,13 +1,27 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Plus, Calendar, Printer, Trash2 } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
-import { DateRangePicker, ShoppingListDetail } from '@/components/shopping';
+import {
+  DateRangePicker,
+  ShoppingListDetail,
+  IngredientMatchModal,
+  GeneratingListModal,
+} from '@/components/shopping';
 import { useShoppingList } from '@/hooks';
-import type { ShoppingList } from '@/types';
+import type { ShoppingList, PendingIngredientMatch } from '@/types';
 import styles from './ShoppingPage.module.css';
 
+interface LocationState {
+  openListId?: string;
+}
+
 export function ShoppingPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as LocationState | null;
+
   const {
     lists,
     currentList,
@@ -26,23 +40,109 @@ export function ShoppingPage() {
     removeItem,
     uncheckAll,
     clearChecked,
+    confirmIngredientMatch,
+    rejectIngredientMatch,
+    confirmAllIngredientMatches,
   } = useShoppingList();
 
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [pendingMatches, setPendingMatches] = useState<PendingIngredientMatch[]>([]);
+  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isAnalyzingIngredients, setIsAnalyzingIngredients] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Handle returning to a specific list (e.g., from recipe detail page)
+  useEffect(() => {
+    if (locationState?.openListId && !isLoading) {
+      setSelectedListId(locationState.openListId);
+      loadList(locationState.openListId);
+      // Clear the state to prevent re-opening on refresh
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [locationState?.openListId, isLoading, loadList, navigate, location.pathname]);
 
   const handleGenerate = useCallback(
     async (name: string, startDate: Date, endDate: Date) => {
+      // Create a new AbortController for this generation
+      abortControllerRef.current = new AbortController();
+      setIsGenerating(true);
+      setIsAnalyzingIngredients(false);
+
       try {
-        const newList = await generateFromMealPlan(name, startDate, endDate);
-        setSelectedListId(newList.id);
-        await loadList(newList.id);
+        const result = await generateFromMealPlan(name, startDate, endDate, {
+          signal: abortControllerRef.current.signal,
+          onProgress: (phase) => {
+            setIsAnalyzingIngredients(phase === 'analyzing');
+          },
+        });
+
+        // Don't update UI if cancelled
+        if (result.cancelled) {
+          return;
+        }
+
+        setSelectedListId(result.list.id);
+        await loadList(result.list.id);
+
+        // Show ingredient match modal if AI found potential matches
+        if (result.pendingMatches.length > 0) {
+          setPendingMatches(result.pendingMatches);
+          setShowMatchModal(true);
+        }
       } catch (error) {
         console.error('Failed to generate list:', error);
+      } finally {
+        setIsGenerating(false);
+        setIsAnalyzingIngredients(false);
+        abortControllerRef.current = null;
       }
     },
     [generateFromMealPlan, loadList]
   );
+
+  const handleCancelGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
+    setIsGenerating(false);
+    setIsAnalyzingIngredients(false);
+  }, []);
+
+  // Handler for navigating to a recipe from shopping list
+  const handleNavigateToRecipe = useCallback(
+    (recipeId: string) => {
+      navigate(`/recipes/${recipeId}`, {
+        state: { from: 'shopping', listId: selectedListId },
+      });
+    },
+    [navigate, selectedListId]
+  );
+
+  // Handlers for ingredient match confirmation
+  const handleConfirmMatch = useCallback(
+    async (match: PendingIngredientMatch) => {
+      await confirmIngredientMatch(match);
+    },
+    [confirmIngredientMatch]
+  );
+
+  const handleRejectMatch = useCallback(
+    async (matchId: string) => {
+      await rejectIngredientMatch(matchId);
+    },
+    [rejectIngredientMatch]
+  );
+
+  const handleConfirmAllMatches = useCallback(async () => {
+    await confirmAllIngredientMatches(pendingMatches);
+    setShowMatchModal(false);
+    setPendingMatches([]);
+  }, [confirmAllIngredientMatches, pendingMatches]);
+
+  const handleSkipAllMatches = useCallback(() => {
+    setShowMatchModal(false);
+    setPendingMatches([]);
+  }, []);
 
   const handleCreateEmpty = useCallback(async () => {
     const name = `Shopping List - ${format(new Date(), 'MMM d, yyyy')}`;
@@ -132,6 +232,17 @@ export function ShoppingPage() {
           onClearChecked={clearChecked}
           onDuplicate={handleDuplicateList}
           onDelete={handleDeleteList}
+          onNavigateToRecipe={handleNavigateToRecipe}
+        />
+
+        <IngredientMatchModal
+          isOpen={showMatchModal}
+          onClose={() => setShowMatchModal(false)}
+          pendingMatches={pendingMatches}
+          onConfirm={handleConfirmMatch}
+          onReject={handleRejectMatch}
+          onConfirmAll={handleConfirmAllMatches}
+          onSkipAll={handleSkipAllMatches}
         />
       </div>
     );
@@ -219,6 +330,12 @@ export function ShoppingPage() {
         isOpen={datePickerOpen}
         onClose={() => setDatePickerOpen(false)}
         onGenerate={handleGenerate}
+      />
+
+      <GeneratingListModal
+        isOpen={isGenerating}
+        onCancel={handleCancelGeneration}
+        isAnalyzingIngredients={isAnalyzingIngredients}
       />
     </div>
   );

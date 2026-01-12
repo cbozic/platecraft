@@ -10,6 +10,7 @@ import type {
   ExternalCalendar,
   ExternalEvent,
   UserSettings,
+  IngredientMapping,
 } from '@/types';
 import { DEFAULT_TAGS, type LegacyTag } from '@/types/tags';
 import { DEFAULT_SETTINGS } from '@/types/settings';
@@ -25,6 +26,7 @@ export class PlatecraftDatabase extends Dexie {
   externalCalendars!: Table<ExternalCalendar, string>;
   externalEvents!: Table<ExternalEvent, string>;
   settings!: Table<UserSettings & { id: string }, string>;
+  ingredientMappings!: Table<IngredientMapping, string>;
 
   constructor() {
     super('platecraft');
@@ -131,6 +133,21 @@ export class PlatecraftDatabase extends Dexie {
 
         console.log('[Migration v3] Migration complete!');
       });
+
+    // Version 4: Add ingredient mappings for shopping list deduplication
+    this.version(4).stores({
+      recipes: 'id, title, *tags, isFavorite, createdAt, updatedAt',
+      tags: 'id, &name',
+      plannedMeals: 'id, date, slotId, recipeId, [date+slotId]',
+      dayNotes: 'id, date',
+      recurringMeals: 'id, recipeId, dayOfWeek, slotId',
+      shoppingLists: 'id, createdAt',
+      shoppingItems: 'id, shoppingListId, isChecked, storeSection',
+      externalCalendars: 'id, provider',
+      externalEvents: 'id, calendarId, [calendarId+startTime]',
+      settings: 'id',
+      ingredientMappings: 'id, canonicalName, *variants',
+    });
   }
 
   async initialize(): Promise<void> {

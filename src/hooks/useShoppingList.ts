@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { shoppingRepository } from '@/db';
-import type { ShoppingList, ShoppingItem, StoreSectionInfo } from '@/types';
+import type {
+  ShoppingList,
+  ShoppingItem,
+  StoreSectionInfo,
+  ShoppingListGenerationResult,
+  PendingIngredientMatch,
+} from '@/types';
 import { DEFAULT_STORE_SECTIONS } from '@/types/shopping';
+import { ingredientDeduplicationService } from '@/services/ingredientDeduplicationService';
 
 interface UseShoppingListOptions {
   listId?: string;
@@ -102,15 +109,65 @@ export function useShoppingList(options: UseShoppingListOptions = {}) {
     return { total, checked, percentage };
   }, [currentList]);
 
-  // Generate list from meal plan
+  // Generate list from meal plan with optional AI deduplication
   const generateFromMealPlan = useCallback(
-    async (name: string, startDate: Date, endDate: Date) => {
+    async (
+      name: string,
+      startDate: Date,
+      endDate: Date,
+      options?: {
+        useAI?: boolean;
+        signal?: AbortSignal;
+        onProgress?: (phase: 'gathering' | 'analyzing') => void;
+      }
+    ): Promise<ShoppingListGenerationResult> => {
       try {
-        const newList = await shoppingRepository.generateFromMealPlan(name, startDate, endDate);
-        setLists((prev) => [newList, ...prev]);
-        return newList;
+        const result = await shoppingRepository.generateFromMealPlan(name, startDate, endDate, options);
+        if (!result.cancelled) {
+          setLists((prev) => [result.list, ...prev]);
+        }
+        return result;
       } catch (error) {
         console.error('Failed to generate shopping list:', error);
+        throw error;
+      }
+    },
+    []
+  );
+
+  // Confirm an AI-suggested ingredient match
+  const confirmIngredientMatch = useCallback(
+    async (match: PendingIngredientMatch) => {
+      try {
+        await ingredientDeduplicationService.confirmMatch(match);
+      } catch (error) {
+        console.error('Failed to confirm ingredient match:', error);
+        throw error;
+      }
+    },
+    []
+  );
+
+  // Reject an AI-suggested ingredient match
+  const rejectIngredientMatch = useCallback(
+    async (matchId: string) => {
+      try {
+        await ingredientDeduplicationService.rejectMatch(matchId);
+      } catch (error) {
+        console.error('Failed to reject ingredient match:', error);
+        throw error;
+      }
+    },
+    []
+  );
+
+  // Confirm all AI-suggested ingredient matches
+  const confirmAllIngredientMatches = useCallback(
+    async (matches: PendingIngredientMatch[]) => {
+      try {
+        await ingredientDeduplicationService.confirmAllMatches(matches);
+      } catch (error) {
+        console.error('Failed to confirm all ingredient matches:', error);
         throw error;
       }
     },
@@ -310,6 +367,11 @@ export function useShoppingList(options: UseShoppingListOptions = {}) {
     removeItem,
     uncheckAll,
     clearChecked,
+
+    // Ingredient matching operations
+    confirmIngredientMatch,
+    rejectIngredientMatch,
+    confirmAllIngredientMatches,
 
     // Refresh
     refresh: loadLists,
