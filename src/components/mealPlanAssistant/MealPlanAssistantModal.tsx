@@ -4,8 +4,7 @@ import { Modal, ModalFooter, Button } from '@/components/ui';
 import { useMealPlanAssistant } from '@/hooks';
 import type { MealSlot, Tag } from '@/types';
 import { IngredientInputStep } from './IngredientInputStep';
-import { DayTagRulesStep } from './DayTagRulesStep';
-import { DateRangeSlotStep } from './DateRangeSlotStep';
+import { MealScheduleStep } from './MealScheduleStep';
 import { PlanPreviewStep } from './PlanPreviewStep';
 import styles from './MealPlanAssistantModal.module.css';
 
@@ -22,12 +21,11 @@ interface MealPlanAssistantModalProps {
 
 const STEP_LABELS = {
   ingredients: 'Ingredients',
-  dayRules: 'Day Rules',
-  dateRange: 'Date Range',
+  mealSchedule: 'Meal Schedule',
   preview: 'Preview',
 };
 
-const STEP_ORDER = ['ingredients', 'dayRules', 'dateRange', 'preview'] as const;
+const STEP_ORDER = ['ingredients', 'mealSchedule', 'preview'] as const;
 
 export function MealPlanAssistantModal({
   isOpen,
@@ -128,28 +126,21 @@ export function MealPlanAssistantModal({
             />
           )}
 
-          {assistant.currentStep === 'dayRules' && (
-            <DayTagRulesStep
-              rules={assistant.config.dayTagRules}
-              skippedDays={assistant.config.skippedDays}
-              availableTags={tags.filter((t) => !t.isHidden).sort((a, b) => a.name.localeCompare(b.name))}
-              weekStartsOn={weekStartsOn}
-              onUpdateRule={assistant.updateDayRule}
-              onClear={assistant.clearDayRules}
-              onToggleSkipDay={assistant.toggleSkipDay}
-            />
-          )}
-
-          {assistant.currentStep === 'dateRange' && (
-            <DateRangeSlotStep
+          {assistant.currentStep === 'mealSchedule' && (
+            <MealScheduleStep
               startDate={assistant.config.startDate}
               endDate={assistant.config.endDate}
-              selectedSlots={assistant.config.selectedSlots}
+              weekdayConfigs={assistant.config.weekdayConfigs}
+              mealSlots={mealSlots}
+              availableTags={tags.filter((t) => !t.isHidden).sort((a, b) => a.name.localeCompare(b.name))}
+              weekStartsOn={weekStartsOn}
               defaultServings={assistant.config.defaultServings}
               favoritesWeight={assistant.config.favoritesWeight}
-              mealSlots={mealSlots}
               onDateRangeChange={assistant.setDateRange}
-              onToggleSlot={assistant.toggleSlot}
+              onToggleMealSlot={assistant.toggleMealSlot}
+              onUpdateMealSlotTags={assistant.updateMealSlotTags}
+              onApplyPreset={assistant.applyMealSchedulePreset}
+              onClearSchedule={assistant.clearMealSchedule}
               onServingsChange={assistant.setServings}
               onFavoritesWeightChange={assistant.setFavoritesWeight}
             />
@@ -165,7 +156,6 @@ export function MealPlanAssistantModal({
               ) : assistant.generatedPlan ? (
                 <PlanPreviewStep
                   plan={assistant.generatedPlan}
-                  dayTagRules={assistant.config.dayTagRules}
                   onSwap={assistant.swapMeal}
                   onReject={assistant.rejectMeal}
                   onLock={assistant.lockMeal}

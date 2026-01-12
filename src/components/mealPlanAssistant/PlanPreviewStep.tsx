@@ -12,13 +12,12 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui';
-import type { GeneratedMealPlan, DayTagRule } from '@/types/mealPlanAssistant';
+import type { GeneratedMealPlan } from '@/types/mealPlanAssistant';
 import { RecipeSwapModal } from './RecipeSwapModal';
 import styles from './PlanPreviewStep.module.css';
 
 interface PlanPreviewStepProps {
   plan: GeneratedMealPlan;
-  dayTagRules: DayTagRule[];
   onSwap: (mealId: string, newRecipeId: string, newRecipeTitle: string) => void;
   onReject: (mealId: string) => void;
   onLock: (mealId: string) => void;
@@ -41,7 +40,6 @@ const MATCH_TYPE_LABELS = {
 
 export function PlanPreviewStep({
   plan,
-  dayTagRules: _dayTagRules,
   onSwap,
   onReject,
   onLock,

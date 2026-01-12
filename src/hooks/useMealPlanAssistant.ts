@@ -8,6 +8,9 @@ import type {
   MealPlanConfig,
   GeneratedMealPlan,
   IngredientOnHand,
+  WeekdayConfig,
+  MealSlotTagConfig,
+  MealSchedulePreset,
 } from '@/types/mealPlanAssistant';
 import type { MealSlot, Tag, PlannedMeal } from '@/types';
 import { generateMealPlan, findAlternativeRecipes } from '@/services/mealPlanAssistantService';
@@ -48,14 +51,14 @@ export interface UseMealPlanAssistantReturn {
   updateIngredient: (id: string, updates: Partial<IngredientOnHand>) => void;
   removeIngredient: (id: string) => void;
 
-  // Day rules actions
-  updateDayRule: (dayOfWeek: number, tagIds: string[], priority: 'required' | 'preferred') => void;
-  clearDayRules: () => void;
-  toggleSkipDay: (dayOfWeek: number) => void;
+  // Meal schedule actions
+  toggleMealSlot: (dayOfWeek: number, slotId: string, enabled: boolean) => void;
+  updateMealSlotTags: (dayOfWeek: number, slotId: string, tagConfig: MealSlotTagConfig | undefined) => void;
+  applyMealSchedulePreset: (preset: MealSchedulePreset) => void;
+  clearMealSchedule: () => void;
 
-  // Date/slot actions
+  // Date/settings actions
   setDateRange: (startDate: Date, endDate: Date) => void;
-  toggleSlot: (slotId: string) => void;
   setServings: (servings: number) => void;
   setFavoritesWeight: (weight: number) => void;
 
@@ -78,7 +81,7 @@ export interface UseMealPlanAssistantReturn {
   saveToStorage: () => void;
 }
 
-const STEP_ORDER: AssistantStep[] = ['ingredients', 'dayRules', 'dateRange', 'preview'];
+const STEP_ORDER: AssistantStep[] = ['ingredients', 'mealSchedule', 'preview'];
 
 function loadStoredState(): StoredState | null {
   try {
@@ -106,15 +109,71 @@ export function hasStoredMealPlanState(): boolean {
 
 function getInitialConfig(defaultServings: number, mealSlots: MealSlot[]): MealPlanConfig {
   const today = new Date();
+
+  // Initialize weekday configs with no meals selected by default
+  const weekdayConfigs: WeekdayConfig[] = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+    dayOfWeek,
+    slots: mealSlots.map((slot) => ({
+      slotId: slot.id,
+      isEnabled: false,
+      tagConfig: undefined,
+    })),
+  }));
+
   return {
     ingredientsOnHand: [],
-    dayTagRules: [],
-    skippedDays: [],
+    weekdayConfigs,
     startDate: startOfWeek(today, { weekStartsOn: 0 }),
     endDate: endOfWeek(today, { weekStartsOn: 0 }),
-    selectedSlots: mealSlots.filter((s) => s.id === 'dinner' || s.id === 'lunch').map((s) => s.id),
     defaultServings,
     favoritesWeight: 50, // Default to balanced (50% favorites preference)
+  };
+}
+
+/**
+ * Migrate old config format to new weekdayConfigs format
+ */
+function migrateOldConfig(oldConfig: MealPlanConfig, mealSlots: MealSlot[]): MealPlanConfig {
+  // If already has weekdayConfigs, return as-is
+  if (oldConfig.weekdayConfigs && oldConfig.weekdayConfigs.length > 0) {
+    return oldConfig;
+  }
+
+  // Migrate from old format
+  const skippedDays = oldConfig.skippedDays || [];
+  const selectedSlots = oldConfig.selectedSlots || [];
+  const dayTagRules = oldConfig.dayTagRules || [];
+
+  const weekdayConfigs: WeekdayConfig[] = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => {
+    const isSkipped = skippedDays.includes(dayOfWeek);
+    const dayRule = dayTagRules.find((r) => r.dayOfWeek === dayOfWeek);
+
+    return {
+      dayOfWeek,
+      slots: mealSlots.map((slot) => {
+        const isEnabled = !isSkipped && selectedSlots.includes(slot.id);
+        // Apply old day-level tags to all enabled slots on that day
+        const tagConfig =
+          dayRule && dayRule.tagIds.length > 0 && isEnabled
+            ? { tagIds: dayRule.tagIds, priority: dayRule.priority }
+            : undefined;
+
+        return {
+          slotId: slot.id,
+          isEnabled,
+          tagConfig,
+        };
+      }),
+    };
+  });
+
+  return {
+    ingredientsOnHand: oldConfig.ingredientsOnHand,
+    weekdayConfigs,
+    startDate: oldConfig.startDate,
+    endDate: oldConfig.endDate,
+    defaultServings: oldConfig.defaultServings,
+    favoritesWeight: oldConfig.favoritesWeight,
   };
 }
 
@@ -141,12 +200,19 @@ export function useMealPlanAssistant({
       console.log('Loaded stored state:', stored);
       if (stored) {
         console.log('Restoring meal plan state from storage');
-        setCurrentStep(stored.currentStep);
-        setConfig({
+        // Map old step names to new ones
+        let step = stored.currentStep;
+        if (step === ('dayRules' as AssistantStep) || step === ('dateRange' as AssistantStep)) {
+          step = 'mealSchedule';
+        }
+        setCurrentStep(step);
+        const restoredConfig = {
           ...stored.config,
           startDate: new Date(stored.config.startDate),
           endDate: new Date(stored.config.endDate),
-        });
+        };
+        // Migrate old config format if needed
+        setConfig(migrateOldConfig(restoredConfig, mealSlots));
         setGeneratedPlan(stored.generatedPlan);
         clearStoredState();
       } else {
@@ -154,7 +220,7 @@ export function useMealPlanAssistant({
       }
       setHasRestored(true);
     }
-  }, [restoreFromStorage, hasRestored]);
+  }, [restoreFromStorage, hasRestored, mealSlots]);
 
   // Tag name lookup
   const tagNamesById = useMemo(() => {
@@ -168,16 +234,15 @@ export function useMealPlanAssistant({
     switch (currentStep) {
       case 'ingredients':
         return true; // Can proceed without ingredients (will use tags/fallback)
-      case 'dayRules':
-        return true; // Can proceed without rules
-      case 'dateRange':
-        return config.selectedSlots.length > 0;
+      case 'mealSchedule':
+        // Must have at least one meal enabled somewhere
+        return config.weekdayConfigs.some((dc) => dc.slots.some((s) => s.isEnabled));
       case 'preview':
         return generatedPlan !== null && generatedPlan.proposedMeals.some((m) => !m.isRejected);
       default:
         return false;
     }
-  }, [currentStep, config.selectedSlots.length, generatedPlan]);
+  }, [currentStep, config.weekdayConfigs, generatedPlan]);
 
   const goNext = useCallback(() => {
     const nextIndex = currentStepIndex + 1;
@@ -231,60 +296,110 @@ export function useMealPlanAssistant({
     }));
   }, []);
 
-  // Day rules actions
-  const updateDayRule = useCallback(
-    (dayOfWeek: number, tagIds: string[], priority: 'required' | 'preferred') => {
-      setConfig((prev) => {
-        const existingRuleIndex = prev.dayTagRules.findIndex((r) => r.dayOfWeek === dayOfWeek);
-        const newRules = [...prev.dayTagRules];
+  // Meal schedule actions
+  const toggleMealSlot = useCallback((dayOfWeek: number, slotId: string, enabled: boolean) => {
+    setConfig((prev) => ({
+      ...prev,
+      weekdayConfigs: prev.weekdayConfigs.map((dc) =>
+        dc.dayOfWeek === dayOfWeek
+          ? {
+              ...dc,
+              slots: dc.slots.map((slot) =>
+                slot.slotId === slotId ? { ...slot, isEnabled: enabled } : slot
+              ),
+            }
+          : dc
+      ),
+    }));
+  }, []);
 
-        if (tagIds.length === 0) {
-          // Remove rule if no tags
-          if (existingRuleIndex >= 0) {
-            newRules.splice(existingRuleIndex, 1);
-          }
-        } else if (existingRuleIndex >= 0) {
-          // Update existing rule
-          newRules[existingRuleIndex] = { dayOfWeek, tagIds, priority };
-        } else {
-          // Add new rule
-          newRules.push({ dayOfWeek, tagIds, priority });
-        }
-
-        return { ...prev, dayTagRules: newRules };
-      });
+  const updateMealSlotTags = useCallback(
+    (dayOfWeek: number, slotId: string, tagConfig: MealSlotTagConfig | undefined) => {
+      setConfig((prev) => ({
+        ...prev,
+        weekdayConfigs: prev.weekdayConfigs.map((dc) =>
+          dc.dayOfWeek === dayOfWeek
+            ? {
+                ...dc,
+                slots: dc.slots.map((slot) =>
+                  slot.slotId === slotId ? { ...slot, tagConfig } : slot
+                ),
+              }
+            : dc
+        ),
+      }));
     },
     []
   );
 
-  const clearDayRules = useCallback(() => {
-    setConfig((prev) => ({ ...prev, dayTagRules: [] }));
+  const applyMealSchedulePreset = useCallback((preset: MealSchedulePreset) => {
+    setConfig((prev) => {
+      const newConfigs = prev.weekdayConfigs.map((dc) => {
+        const isWeekend = dc.dayOfWeek === 0 || dc.dayOfWeek === 6;
+
+        switch (preset) {
+          case 'weekday-dinners':
+            return {
+              ...dc,
+              slots: dc.slots.map((slot) => ({
+                ...slot,
+                // Additive: enable dinner on weekdays, keep existing enabled slots
+                isEnabled: slot.isEnabled || (slot.slotId === 'dinner' && !isWeekend),
+              })),
+            };
+          case 'dinner-only':
+            return {
+              ...dc,
+              slots: dc.slots.map((slot) => ({
+                ...slot,
+                // Additive: enable dinner, keep existing enabled slots
+                isEnabled: slot.isEnabled || slot.slotId === 'dinner',
+              })),
+            };
+          case 'lunch-dinner':
+            return {
+              ...dc,
+              slots: dc.slots.map((slot) => ({
+                ...slot,
+                // Additive: enable lunch and dinner, keep existing enabled slots
+                isEnabled: slot.isEnabled || slot.slotId === 'lunch' || slot.slotId === 'dinner',
+              })),
+            };
+          case 'weekend-lunches':
+            return {
+              ...dc,
+              slots: dc.slots.map((slot) => ({
+                ...slot,
+                // Additive: enable lunch on weekends, keep existing enabled slots
+                isEnabled: slot.isEnabled || (slot.slotId === 'lunch' && isWeekend),
+              })),
+            };
+          default:
+            return dc;
+        }
+      });
+
+      return { ...prev, weekdayConfigs: newConfigs };
+    });
   }, []);
 
-  const toggleSkipDay = useCallback((dayOfWeek: number) => {
+  const clearMealSchedule = useCallback(() => {
     setConfig((prev) => ({
       ...prev,
-      skippedDays: prev.skippedDays.includes(dayOfWeek)
-        ? prev.skippedDays.filter((d) => d !== dayOfWeek)
-        : [...prev.skippedDays, dayOfWeek],
+      weekdayConfigs: prev.weekdayConfigs.map((dc) => ({
+        ...dc,
+        slots: dc.slots.map((slot) => ({
+          ...slot,
+          isEnabled: false,
+          tagConfig: undefined,
+        })),
+      })),
     }));
   }, []);
 
-  // Date/slot actions
+  // Date/settings actions
   const setDateRange = useCallback((startDate: Date, endDate: Date) => {
     setConfig((prev) => ({ ...prev, startDate, endDate }));
-  }, []);
-
-  const toggleSlot = useCallback((slotId: string) => {
-    setConfig((prev) => {
-      const isSelected = prev.selectedSlots.includes(slotId);
-      return {
-        ...prev,
-        selectedSlots: isSelected
-          ? prev.selectedSlots.filter((id) => id !== slotId)
-          : [...prev.selectedSlots, slotId],
-      };
-    });
   }, []);
 
   const setServings = useCallback((servings: number) => {
@@ -385,13 +500,14 @@ export function useMealPlanAssistant({
       const alternatives = await findAlternativeRecipes(
         meal.recipeId,
         dayOfWeek,
-        config.dayTagRules,
+        meal.slotId,
+        config.weekdayConfigs,
         usedRecipeIds
       );
 
       return alternatives.map((r) => ({ id: r.id, title: r.title }));
     },
-    [generatedPlan, config.dayTagRules]
+    [generatedPlan, config.weekdayConfigs]
   );
 
   // Apply
@@ -468,11 +584,11 @@ export function useMealPlanAssistant({
     addIngredient,
     updateIngredient,
     removeIngredient,
-    updateDayRule,
-    clearDayRules,
-    toggleSkipDay,
+    toggleMealSlot,
+    updateMealSlotTags,
+    applyMealSchedulePreset,
+    clearMealSchedule,
     setDateRange,
-    toggleSlot,
     setServings,
     setFavoritesWeight,
     generatePlan,

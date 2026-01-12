@@ -6,7 +6,8 @@ import type {
   ProposedMeal,
   IngredientOnHand,
   IngredientUsage,
-  DayTagRule,
+  WeekdayConfig,
+  MealSlotTagConfig,
   RecipeMatchScore,
   SlotToFill,
   PlanCoverage,
@@ -353,34 +354,34 @@ function allIngredientsDepleted(pool: IngredientOnHand[]): boolean {
 }
 
 /**
- * Generate list of slots to fill
+ * Generate list of slots to fill based on weekdayConfigs
  */
 function generateSlotList(
   startDate: Date,
   endDate: Date,
-  selectedSlots: string[],
-  mealSlots: MealSlot[],
-  skippedDays: number[] = []
+  weekdayConfigs: WeekdayConfig[],
+  mealSlots: MealSlot[]
 ): SlotToFill[] {
   const slots: SlotToFill[] = [];
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
   for (const day of days) {
     const dayOfWeek = day.getDay();
-
-    // Skip days that are marked as skipped
-    if (skippedDays.includes(dayOfWeek)) {
-      continue;
-    }
-
     const dateStr = format(day, 'yyyy-MM-dd');
 
-    for (const slotId of selectedSlots) {
-      const slot = mealSlots.find((s) => s.id === slotId);
+    // Find config for this day of week
+    const dayConfig = weekdayConfigs.find((dc) => dc.dayOfWeek === dayOfWeek);
+    if (!dayConfig) continue;
+
+    // Add enabled slots for this day
+    for (const slotConfig of dayConfig.slots) {
+      if (!slotConfig.isEnabled) continue;
+
+      const slot = mealSlots.find((s) => s.id === slotConfig.slotId);
       if (slot) {
         slots.push({
           date: dateStr,
-          slotId,
+          slotId: slotConfig.slotId,
           slotName: slot.name,
           dayOfWeek,
         });
@@ -389,6 +390,21 @@ function generateSlotList(
   }
 
   return slots;
+}
+
+/**
+ * Get tag config for a specific slot on a specific day
+ */
+function getSlotTagConfig(
+  weekdayConfigs: WeekdayConfig[],
+  dayOfWeek: number,
+  slotId: string
+): MealSlotTagConfig | undefined {
+  const dayConfig = weekdayConfigs.find((dc) => dc.dayOfWeek === dayOfWeek);
+  if (!dayConfig) return undefined;
+
+  const slotConfig = dayConfig.slots.find((s) => s.slotId === slotId);
+  return slotConfig?.tagConfig;
 }
 
 /**
@@ -436,42 +452,30 @@ function pickRecipeWithFavoritesWeight(
 }
 
 /**
- * Find recipe matching day's tag rules
+ * Find recipe matching slot's tag config
  */
 function findTagMatchingRecipe(
   recipes: Recipe[],
-  dayRules: DayTagRule[],
+  tagConfig: MealSlotTagConfig | undefined,
   usedRecipes: Set<string>,
   favoritesWeight: number = 50
 ): Recipe | null {
-  // First try required rules
-  const requiredRules = dayRules.filter((r) => r.priority === 'required');
-  if (requiredRules.length > 0) {
-    const requiredTagIds = requiredRules.flatMap((r) => r.tagIds);
-    const matching = recipes.filter(
-      (r) =>
-        !usedRecipes.has(r.id) &&
-        requiredTagIds.some((tagId) => r.tags.includes(tagId))
-    );
-    if (matching.length > 0) {
-      return pickRecipeWithFavoritesWeight(matching, favoritesWeight);
-    }
+  if (!tagConfig || tagConfig.tagIds.length === 0) {
+    return null;
   }
 
-  // Then try preferred rules
-  const preferredRules = dayRules.filter((r) => r.priority === 'preferred');
-  if (preferredRules.length > 0) {
-    const preferredTagIds = preferredRules.flatMap((r) => r.tagIds);
-    const matching = recipes.filter(
-      (r) =>
-        !usedRecipes.has(r.id) &&
-        preferredTagIds.some((tagId) => r.tags.includes(tagId))
-    );
-    if (matching.length > 0) {
-      return pickRecipeWithFavoritesWeight(matching, favoritesWeight);
-    }
+  const matching = recipes.filter(
+    (r) =>
+      !usedRecipes.has(r.id) &&
+      tagConfig.tagIds.some((tagId) => r.tags.includes(tagId))
+  );
+
+  if (matching.length > 0) {
+    return pickRecipeWithFavoritesWeight(matching, favoritesWeight);
   }
 
+  // For required tags, return null if no match (will use fallback)
+  // For preferred tags, also return null (will use fallback)
   return null;
 }
 
@@ -524,20 +528,18 @@ interface RecipeUsageTracker {
 function findRecipeForReuse(
   recipes: Recipe[],
   usageTracker: RecipeUsageTracker,
-  dayRules: DayTagRule[],
-  dayOfWeek: number,
+  tagConfig: MealSlotTagConfig | undefined,
   favoritesWeight: number = 50
 ): Recipe | null {
   if (recipes.length === 0) return null;
 
-  // Get rules for this day
-  const rulesForDay = dayRules.filter((r) => r.dayOfWeek === dayOfWeek);
-  const preferredTagIds = rulesForDay.flatMap((r) => r.tagIds);
+  // Get tag IDs from config
+  const preferredTagIds = tagConfig?.tagIds || [];
 
   // Calculate the favorites bonus based on weight (0-10 scale based on 0-100 weight)
   const favoritesBonus = (favoritesWeight / 100) * 10;
 
-  // Score each recipe by how long ago it was used and if it matches day rules
+  // Score each recipe by how long ago it was used and if it matches tags
   const scoredRecipes = recipes.map((recipe) => {
     const lastUsed = usageTracker.lastUsedAtSlot.get(recipe.id);
     // If never used, give maximum distance
@@ -545,8 +547,8 @@ function findRecipeForReuse(
       ? usageTracker.currentSlotIndex + recipes.length
       : usageTracker.currentSlotIndex - lastUsed;
 
-    // Bonus for matching day rules
-    const matchesDayRules = preferredTagIds.length > 0 &&
+    // Bonus for matching tag config
+    const matchesTags = preferredTagIds.length > 0 &&
       preferredTagIds.some((tagId) => recipe.tags.includes(tagId));
 
     // Bonus for favorites (scaled by favoritesWeight)
@@ -555,10 +557,10 @@ function findRecipeForReuse(
     return {
       recipe,
       distance,
-      matchesDayRules,
+      matchesTags,
       isFavorite,
       // Combined score: distance is primary, with weighted bonuses
-      score: distance * 10 + (matchesDayRules ? 5 : 0) + (isFavorite ? favoritesBonus : 0),
+      score: distance * 10 + (matchesTags ? 5 : 0) + (isFavorite ? favoritesBonus : 0),
     };
   });
 
@@ -607,8 +609,8 @@ export async function generateMealPlan(
     };
   }
 
-  // Generate slots to fill (filtering out skipped days)
-  const allSlots = generateSlotList(config.startDate, config.endDate, config.selectedSlots, mealSlots, config.skippedDays);
+  // Generate slots to fill based on weekdayConfigs
+  const allSlots = generateSlotList(config.startDate, config.endDate, config.weekdayConfigs, mealSlots);
   const slotsToFill = [...allSlots];
 
   // PHASE 1: Find recipes that use ingredients on hand
@@ -622,13 +624,13 @@ export async function generateMealPlan(
     for (const slot of ingredientSlots) {
       if (allIngredientsDepleted(ingredientPool)) break;
 
-      const dayRules = config.dayTagRules.filter((r) => r.dayOfWeek === slot.dayOfWeek);
+      const tagConfig = getSlotTagConfig(config.weekdayConfigs, slot.dayOfWeek, slot.slotId);
 
       // Find all valid recipes that:
       // a) Use available ingredients
       // b) Haven't been used yet
-      // c) Match day's tag rules if possible
-      const validCandidates: { score: RecipeMatchScore; recipe: Recipe; matchesDayTags: boolean }[] = [];
+      // c) Match slot's tag config if possible
+      const validCandidates: { score: RecipeMatchScore; recipe: Recipe; matchesTags: boolean }[] = [];
 
       for (const score of recipeScores) {
         if (usedRecipes.has(score.recipeId)) continue;
@@ -644,26 +646,25 @@ export async function generateMealPlan(
         const recipe = allRecipes.find((r) => r.id === score.recipeId);
         if (!recipe) continue;
 
-        const matchesDayTags = dayRules.length > 0 && dayRules.some((rule) =>
-          rule.tagIds.some((tagId) => recipe.tags.includes(tagId))
-        );
+        const matchesTags = tagConfig && tagConfig.tagIds.length > 0 &&
+          tagConfig.tagIds.some((tagId) => recipe.tags.includes(tagId));
 
-        validCandidates.push({ score, recipe, matchesDayTags });
+        validCandidates.push({ score, recipe, matchesTags: matchesTags || false });
       }
 
-      // Select from candidates: prefer day-tag matches, then use favorites weight
+      // Select from candidates: prefer tag matches, then use favorites weight
       let bestMatch: RecipeMatchScore | null = null;
       let selectedRecipe: Recipe | null = null;
 
       if (validCandidates.length > 0) {
-        // First priority: recipes matching day's tag rules
-        const dayTagMatches = validCandidates.filter((c) => c.matchesDayTags);
-        if (dayTagMatches.length > 0) {
-          const recipes = dayTagMatches.map((c) => c.recipe);
+        // First priority: recipes matching slot's tag config
+        const tagMatches = validCandidates.filter((c) => c.matchesTags);
+        if (tagMatches.length > 0) {
+          const recipes = tagMatches.map((c) => c.recipe);
           selectedRecipe = pickRecipeWithFavoritesWeight(recipes, config.favoritesWeight);
-          bestMatch = dayTagMatches.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
+          bestMatch = tagMatches.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
         } else {
-          // No day-tag matches, pick from all valid candidates using favorites weight
+          // No tag matches, pick from all valid candidates using favorites weight
           const recipes = validCandidates.map((c) => c.recipe);
           selectedRecipe = pickRecipeWithFavoritesWeight(recipes, config.favoritesWeight);
           bestMatch = validCandidates.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
@@ -704,10 +705,10 @@ export async function generateMealPlan(
 
   // PHASE 2: Fill remaining slots with tag-matching recipes
   for (const slot of [...slotsToFill]) {
-    const dayRules = config.dayTagRules.filter((r) => r.dayOfWeek === slot.dayOfWeek);
+    const tagConfig = getSlotTagConfig(config.weekdayConfigs, slot.dayOfWeek, slot.slotId);
 
-    if (dayRules.length > 0) {
-      const recipe = findTagMatchingRecipe(allRecipes, dayRules, usedRecipes, config.favoritesWeight);
+    if (tagConfig && tagConfig.tagIds.length > 0) {
+      const recipe = findTagMatchingRecipe(allRecipes, tagConfig, usedRecipes, config.favoritesWeight);
 
       if (recipe) {
         usedRecipes.add(recipe.id);
@@ -720,7 +721,7 @@ export async function generateMealPlan(
           slotsToFill.splice(slotIndex, 1);
         }
 
-        const matchedTagIds = dayRules.flatMap((r) => r.tagIds).filter((tagId) => recipe.tags.includes(tagId));
+        const matchedTagIds = tagConfig.tagIds.filter((tagId) => recipe.tags.includes(tagId));
 
         proposedMeals.push({
           id: uuidv4(),
@@ -757,7 +758,8 @@ export async function generateMealPlan(
 
     // If no unused recipes, find a recipe to reuse with maximum spacing
     if (!recipe && allRecipes.length > 0) {
-      recipe = findRecipeForReuse(allRecipes, usageTracker, config.dayTagRules, slot.dayOfWeek, config.favoritesWeight);
+      const tagConfig = getSlotTagConfig(config.weekdayConfigs, slot.dayOfWeek, slot.slotId);
+      recipe = findRecipeForReuse(allRecipes, usageTracker, tagConfig, config.favoritesWeight);
     }
 
     if (recipe) {
@@ -842,7 +844,8 @@ export async function generateMealPlan(
 export async function findAlternativeRecipes(
   currentRecipeId: string,
   dayOfWeek: number,
-  dayRules: DayTagRule[],
+  slotId: string,
+  weekdayConfigs: WeekdayConfig[],
   usedRecipeIds: string[],
   limit: number = 10
 ): Promise<Recipe[]> {
@@ -852,10 +855,10 @@ export async function findAlternativeRecipes(
   // Filter out used recipes and current recipe
   let candidates = allRecipes.filter((r) => r.id !== currentRecipeId && !usedSet.has(r.id));
 
-  // Prioritize recipes matching day's tag rules
-  const rulesForDay = dayRules.filter((r) => r.dayOfWeek === dayOfWeek);
-  if (rulesForDay.length > 0) {
-    const tagIds = rulesForDay.flatMap((r) => r.tagIds);
+  // Prioritize recipes matching slot's tag config
+  const tagConfig = getSlotTagConfig(weekdayConfigs, dayOfWeek, slotId);
+  if (tagConfig && tagConfig.tagIds.length > 0) {
+    const tagIds = tagConfig.tagIds;
     const matching = candidates.filter((r) => tagIds.some((tagId) => r.tags.includes(tagId)));
     const nonMatching = candidates.filter((r) => !tagIds.some((tagId) => r.tags.includes(tagId)));
 

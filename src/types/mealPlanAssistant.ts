@@ -13,6 +13,7 @@ export interface IngredientOnHand {
 
 /**
  * Tag rule for a specific day of the week
+ * @deprecated Use MealSlotTagConfig within WeekdayConfig instead
  */
 export interface DayTagRule {
   dayOfWeek: number; // 0 = Sunday, 6 = Saturday
@@ -30,17 +31,54 @@ export interface MealSlotSelection {
 }
 
 /**
+ * Tag configuration for a specific meal slot on a day
+ */
+export interface MealSlotTagConfig {
+  tagIds: string[];
+  priority: 'required' | 'preferred';
+}
+
+/**
+ * Configuration for a single meal slot on a specific day of week
+ */
+export interface DayMealSlotConfig {
+  slotId: string;
+  isEnabled: boolean;
+  tagConfig?: MealSlotTagConfig;
+}
+
+/**
+ * Configuration for a single day of the week (Sun-Sat)
+ */
+export interface WeekdayConfig {
+  dayOfWeek: number; // 0 = Sunday, 6 = Saturday
+  slots: DayMealSlotConfig[];
+}
+
+/**
+ * Quick preset identifiers for common meal schedule configurations
+ */
+export type MealSchedulePreset =
+  | 'weekday-dinners'
+  | 'dinner-only'
+  | 'lunch-dinner'
+  | 'weekend-lunches'
+  | 'custom';
+
+/**
  * Configuration for meal plan generation
  */
 export interface MealPlanConfig {
   ingredientsOnHand: IngredientOnHand[];
-  dayTagRules: DayTagRule[];
-  skippedDays: number[]; // Days of week to skip (0 = Sunday, 6 = Saturday)
+  weekdayConfigs: WeekdayConfig[];
   startDate: Date;
   endDate: Date;
-  selectedSlots: string[]; // Slot IDs to fill
   defaultServings: number;
   favoritesWeight: number; // 0-100: percentage weight for preferring favorite recipes
+  // Deprecated fields - kept for migration
+  dayTagRules?: DayTagRule[];
+  skippedDays?: number[];
+  selectedSlots?: string[];
 }
 
 /**
@@ -103,7 +141,7 @@ export interface GeneratedMealPlan {
 /**
  * Wizard step identifiers
  */
-export type AssistantStep = 'ingredients' | 'dayRules' | 'dateRange' | 'preview';
+export type AssistantStep = 'ingredients' | 'mealSchedule' | 'preview';
 
 /**
  * Recipe match score for algorithm
