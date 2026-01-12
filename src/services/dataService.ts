@@ -7,6 +7,7 @@ import {
 } from '@/db';
 import type { PlatecraftExport, Tag, Recipe, ExternalCalendar } from '@/types';
 import { CURRENT_EXPORT_VERSION } from '@/types';
+import { DEFAULT_TAGS, type LegacyTag } from '@/types/tags';
 import { imageService } from './imageService';
 import { cryptoService, type EncryptedExport } from './cryptoService';
 
@@ -173,8 +174,9 @@ export const dataService = {
       })
     );
 
-    // Only export custom tags (system tags are rebuilt on import)
-    const customTags = allTags.filter((tag) => !tag.isSystem);
+    // Export all tags (name-based system - no system/custom distinction)
+    // The export format uses 'customTags' field name for backwards compatibility
+    const customTags = allTags;
 
     // Process recipes based on export options
     let processedRecipes: Recipe[];
@@ -309,7 +311,8 @@ export const dataService = {
       })
     );
 
-    const customTags = allTags.filter((tag) => !tag.isSystem);
+    // Export all tags (name-based system - no system/custom distinction)
+    const customTags = allTags;
 
     // Build JSON parts array - this is more memory efficient than concatenating strings
     const parts: string[] = [];
@@ -475,16 +478,15 @@ export const dataService = {
       }
     }
 
-    // Validate custom tags
+    // Validate custom tags (support both legacy id-based and new name-based formats)
     if (Array.isArray(obj.customTags)) {
       for (let i = 0; i < obj.customTags.length; i++) {
         const tag = obj.customTags[i] as Record<string, unknown>;
-        if (!tag.id || typeof tag.id !== 'string') {
-          errors.push(`Custom tag at index ${i}: missing or invalid id`);
-        }
+        // Name is required in both formats
         if (!tag.name || typeof tag.name !== 'string') {
           errors.push(`Custom tag at index ${i}: missing or invalid name`);
         }
+        // Note: 'id' is optional (present in legacy format, absent in new format)
       }
     }
 
@@ -493,6 +495,7 @@ export const dataService = {
 
   /**
    * Import data from a JSON export (merge mode - adds to existing data)
+   * Supports both legacy ID-based tags and new name-based tags
    */
   async importData(data: PlatecraftExport, mode: 'merge' | 'replace' = 'merge'): Promise<ImportResult> {
     const errors: string[] = [];
@@ -511,31 +514,69 @@ export const dataService = {
         await this.clearAllData(false); // Don't clear settings
       }
 
-      // Import custom tags first (recipes may reference them)
-      if (data.customTags && data.customTags.length > 0) {
-        const existingTags = await tagRepository.getAll();
-        const existingNames = new Set(existingTags.map((t) => t.name.toLowerCase()));
+      // Detect if this is a legacy export (ID-based tags)
+      const isLegacyFormat = data.customTags?.some(
+        (t) => 'id' in t && 'isSystem' in t
+      );
 
-        for (const tag of data.customTags) {
-          // Skip if tag with same name exists
-          if (!existingNames.has(tag.name.toLowerCase())) {
+      if (isLegacyFormat) {
+        console.log('[Import] Detected legacy ID-based tag format, converting to name-based');
+      }
+
+      // Build tag ID→Name map for legacy format conversion
+      const tagIdToName = new Map<string, string>();
+      if (isLegacyFormat && data.customTags) {
+        for (const tag of data.customTags as LegacyTag[]) {
+          // Skip hidden system tags from old exports
+          if (tag.isSystem && tag.isHidden) {
+            continue;
+          }
+          tagIdToName.set(tag.id, tag.name);
+        }
+      }
+
+      // Get all current tags in the database
+      const existingTags = await tagRepository.getAll();
+      const existingTagsByName = new Map(
+        existingTags.map((t) => [t.name.toLowerCase(), t])
+      );
+
+      // Import tags (handling both legacy and new formats)
+      if (data.customTags && data.customTags.length > 0) {
+        for (const rawTag of data.customTags) {
+          // For legacy format, skip hidden system tags
+          if (isLegacyFormat) {
+            const legacyTag = rawTag as LegacyTag;
+            if (legacyTag.isSystem && legacyTag.isHidden) {
+              continue;
+            }
+          }
+
+          const existingTag = existingTagsByName.get(rawTag.name.toLowerCase());
+          if (!existingTag) {
+            // New tag - import it
             try {
-              // Ensure it's marked as custom tag
               const tagToImport: Tag = {
-                ...tag,
-                isSystem: false,
+                id: crypto.randomUUID(),
+                name: rawTag.name,
+                color: rawTag.color,
               };
               await db.tags.add(tagToImport);
               imported.tags++;
-              existingNames.add(tag.name.toLowerCase());
+              existingTagsByName.set(rawTag.name.toLowerCase(), tagToImport);
             } catch (err) {
-              errors.push(`Failed to import tag "${tag.name}": ${err}`);
+              errors.push(`Failed to import tag "${rawTag.name}": ${err}`);
             }
           }
         }
       }
 
-      // Import recipes
+      // Log conversion info for debugging
+      if (isLegacyFormat && tagIdToName.size > 0) {
+        console.log(`[Import] Built ID→Name mapping for ${tagIdToName.size} legacy tags`);
+      }
+
+      // Import recipes with tag conversion for legacy format
       if (data.recipes && data.recipes.length > 0) {
         const existingRecipes = await recipeRepository.getAll();
         const existingIds = new Set(existingRecipes.map((r) => r.id));
@@ -547,9 +588,21 @@ export const dataService = {
           }
 
           try {
+            // Convert tag IDs to names for legacy format, otherwise use as-is (already names)
+            let tags: string[];
+            if (isLegacyFormat) {
+              // Convert IDs to names, filtering out any unmapped IDs
+              tags = recipe.tags
+                .map((tagId) => tagIdToName.get(tagId))
+                .filter((name): name is string => name !== undefined);
+            } else {
+              tags = recipe.tags;
+            }
+
             // Ensure dates are Date objects
             const recipeToImport: Recipe = {
               ...recipe,
+              tags,
               createdAt: new Date(recipe.createdAt),
               updatedAt: new Date(recipe.updatedAt),
             };
@@ -746,13 +799,16 @@ export const dataService = {
   async clearAllData(includeSettings = true): Promise<void> {
     await Promise.all([
       db.recipes.clear(),
-      db.tags.filter((tag) => !tag.isSystem).delete(), // Keep system tags
+      db.tags.clear(),
       db.plannedMeals.clear(),
       db.dayNotes.clear(),
       db.recurringMeals.clear(),
       db.shoppingLists.clear(),
       db.externalCalendars.clear(),
     ]);
+
+    // Re-add default tags
+    await db.tags.bulkAdd(DEFAULT_TAGS);
 
     if (includeSettings) {
       await settingsRepository.reset();
@@ -770,7 +826,7 @@ export const dataService = {
   }> {
     const [recipes, tags, mealPlans, shoppingLists] = await Promise.all([
       db.recipes.count(),
-      db.tags.filter((tag) => !tag.isSystem).count(),
+      db.tags.count(),
       db.plannedMeals.count(),
       db.shoppingLists.count(),
     ]);
@@ -781,5 +837,40 @@ export const dataService = {
       mealPlans,
       shoppingLists,
     };
+  },
+
+  /**
+   * Clean up orphaned recipe tags (tag names that don't exist in the database)
+   * This fixes data integrity issues from old exports/imports
+   */
+  async cleanupOrphanedRecipeTags(): Promise<{
+    recipesUpdated: number;
+    orphanedTagsRemoved: number;
+  }> {
+    const allRecipes = await recipeRepository.getAll();
+    const allTags = await tagRepository.getAll();
+    const validTagNames = new Set(allTags.map((t) => t.name.toLowerCase()));
+
+    let recipesUpdated = 0;
+    let orphanedTagsRemoved = 0;
+
+    for (const recipe of allRecipes) {
+      const orphanedTags = recipe.tags.filter(
+        (tagName) => !validTagNames.has(tagName.toLowerCase())
+      );
+
+      if (orphanedTags.length > 0) {
+        const validTags = recipe.tags.filter((tagName) =>
+          validTagNames.has(tagName.toLowerCase())
+        );
+        await db.recipes.update(recipe.id, { tags: validTags });
+        recipesUpdated++;
+        orphanedTagsRemoved += orphanedTags.length;
+      }
+    }
+
+    console.log(`[Cleanup] Updated ${recipesUpdated} recipes, removed ${orphanedTagsRemoved} orphaned tag references`);
+
+    return { recipesUpdated, orphanedTagsRemoved };
   },
 };

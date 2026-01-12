@@ -14,6 +14,7 @@ interface LocationState {
   date?: string;
   searchQuery?: string;
   searchParams?: string;
+  viewMode?: 'grid' | 'table';
 }
 
 export function RecipeDetailPage() {
@@ -35,7 +36,7 @@ export function RecipeDetailPage() {
           setRecipe(recipeData);
           setScaledServings(recipeData.servings);
           if (recipeData.tags.length > 0) {
-            const tagData = await tagRepository.getByIds(recipeData.tags);
+            const tagData = await tagRepository.getByNames(recipeData.tags);
             setTags(tagData);
           }
         }
@@ -128,6 +129,7 @@ export function RecipeDetailPage() {
         state: {
           searchQuery: state.searchQuery,
           searchParams: state.searchParams,
+          viewMode: state.viewMode,
         },
       });
     }
@@ -200,7 +202,7 @@ export function RecipeDetailPage() {
           {tags.length > 0 && (
             <div className={styles.tags}>
               {[...tags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => (
-                <span key={tag.id} className={styles.tag}>
+                <span key={tag.name} className={styles.tag}>
                   {tag.name}
                 </span>
               ))}

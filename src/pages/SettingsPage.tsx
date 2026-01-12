@@ -486,6 +486,24 @@ export function SettingsPage() {
 
         <Card>
           <CardHeader>
+            <h2 className={styles.sectionTitle}>Tags</h2>
+          </CardHeader>
+          <CardBody>
+            <TagManager key={`tags-${dataVersion}`} />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h2 className={styles.sectionTitle}>Shopping List Staples</h2>
+          </CardHeader>
+          <CardBody>
+            <StapleIngredientsManager key={`staples-${dataVersion}`} />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <h2 className={styles.sectionTitle}>Calendar</h2>
           </CardHeader>
           <CardBody>
@@ -518,24 +536,6 @@ export function SettingsPage() {
           </CardHeader>
           <CardBody>
             <CalendarSettings key={`calendars-${dataVersion}`} />
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <h2 className={styles.sectionTitle}>Tags</h2>
-          </CardHeader>
-          <CardBody>
-            <TagManager key={`tags-${dataVersion}`} />
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <h2 className={styles.sectionTitle}>Shopping List Staples</h2>
-          </CardHeader>
-          <CardBody>
-            <StapleIngredientsManager key={`staples-${dataVersion}`} />
           </CardBody>
         </Card>
 

@@ -4,15 +4,15 @@ import type { Tag } from '@/types/tags';
 import styles from './TagEditPopup.module.css';
 
 interface TagEditPopupProps {
-  selectedTagIds: string[];
+  selectedTagNames: string[];
   allTags: Tag[];
   onClose: () => void;
-  onChange: (tagIds: string[]) => void;
+  onChange: (tagNames: string[]) => void;
   anchorEl: HTMLElement | null;
 }
 
 export function TagEditPopup({
-  selectedTagIds,
+  selectedTagNames,
   allTags,
   onClose,
   onChange,
@@ -20,14 +20,14 @@ export function TagEditPopup({
 }: TagEditPopupProps) {
   const popupRef = useRef<HTMLDivElement>(null);
   const [showAllTags, setShowAllTags] = useState(false);
-  const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedTagIds);
+  const [localSelectedNames, setLocalSelectedNames] = useState<string[]>(selectedTagNames);
 
   const VISIBLE_TAG_COUNT = 8;
 
-  // Update local state when selectedTagIds changes
+  // Update local state when selectedTagNames changes
   useEffect(() => {
-    setLocalSelectedIds(selectedTagIds);
-  }, [selectedTagIds]);
+    setLocalSelectedNames(selectedTagNames);
+  }, [selectedTagNames]);
 
   // Position the popup relative to anchor element
   useEffect(() => {
@@ -87,18 +87,24 @@ export function TagEditPopup({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleTagToggle = (tagId: string) => {
-    const newTags = localSelectedIds.includes(tagId)
-      ? localSelectedIds.filter((t) => t !== tagId)
-      : [...localSelectedIds, tagId];
-    setLocalSelectedIds(newTags);
+  const isTagSelected = (tagName: string) => {
+    const tagNameLower = tagName.toLowerCase();
+    return localSelectedNames.some((t) => t.toLowerCase() === tagNameLower);
+  };
+
+  const handleTagToggle = (tagName: string) => {
+    const tagNameLower = tagName.toLowerCase();
+    const newTags = isTagSelected(tagName)
+      ? localSelectedNames.filter((t) => t.toLowerCase() !== tagNameLower)
+      : [...localSelectedNames, tagName];
+    setLocalSelectedNames(newTags);
     onChange(newTags);
   };
 
   // Sort tags: selected first, then alphabetically
   const sortedTags = [...allTags].sort((a, b) => {
-    const aSelected = localSelectedIds.includes(a.id);
-    const bSelected = localSelectedIds.includes(b.id);
+    const aSelected = isTagSelected(a.name);
+    const bSelected = isTagSelected(b.name);
     if (aSelected && !bSelected) return -1;
     if (!aSelected && bSelected) return 1;
     return a.name.localeCompare(b.name);
@@ -119,11 +125,11 @@ export function TagEditPopup({
       <div className={styles.content}>
         <div className={styles.tagGrid}>
           {visibleTags.map((tag) => (
-            <label key={tag.id} className={styles.tagCheckbox}>
+            <label key={tag.name} className={styles.tagCheckbox}>
               <input
                 type="checkbox"
-                checked={localSelectedIds.includes(tag.id)}
-                onChange={() => handleTagToggle(tag.id)}
+                checked={isTagSelected(tag.name)}
+                onChange={() => handleTagToggle(tag.name)}
               />
               <span
                 className={styles.tagLabel}

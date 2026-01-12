@@ -57,7 +57,7 @@ export function RecipeFilterPanel({ filters, onChange, isOpen, onClose }: Recipe
 
   useEffect(() => {
     const loadTags = async () => {
-      const tags = await tagRepository.getVisibleTags();
+      const tags = await tagRepository.getAll();
       setAvailableTags(tags);
     };
     loadTags();
@@ -86,10 +86,12 @@ export function RecipeFilterPanel({ filters, onChange, isOpen, onClose }: Recipe
 
   if (!isOpen) return null;
 
-  const handleTagToggle = (tagId: string) => {
-    const newTags = filters.tags.includes(tagId)
-      ? filters.tags.filter((t) => t !== tagId)
-      : [...filters.tags, tagId];
+  const handleTagToggle = (tagName: string) => {
+    const tagNameLower = tagName.toLowerCase();
+    const isSelected = filters.tags.some((t) => t.toLowerCase() === tagNameLower);
+    const newTags = isSelected
+      ? filters.tags.filter((t) => t.toLowerCase() !== tagNameLower)
+      : [...filters.tags, tagName];
     onChange({ ...filters, tags: newTags });
   };
 
@@ -120,9 +122,10 @@ export function RecipeFilterPanel({ filters, onChange, isOpen, onClose }: Recipe
   };
 
   // Sort tags: selected first, then alphabetically
+  const filterTagsLower = filters.tags.map((t) => t.toLowerCase());
   const sortedTags = [...availableTags].sort((a, b) => {
-    const aSelected = filters.tags.includes(a.id);
-    const bSelected = filters.tags.includes(b.id);
+    const aSelected = filterTagsLower.includes(a.name.toLowerCase());
+    const bSelected = filterTagsLower.includes(b.name.toLowerCase());
     if (aSelected && !bSelected) return -1;
     if (!aSelected && bSelected) return 1;
     return a.name.localeCompare(b.name);
@@ -154,11 +157,11 @@ export function RecipeFilterPanel({ filters, onChange, isOpen, onClose }: Recipe
           <h4 className={styles.sectionTitle}>Tags</h4>
           <div className={styles.tagGrid}>
             {visibleTags.map((tag) => (
-              <label key={tag.id} className={styles.tagCheckbox}>
+              <label key={tag.name} className={styles.tagCheckbox}>
                 <input
                   type="checkbox"
-                  checked={filters.tags.includes(tag.id)}
-                  onChange={() => handleTagToggle(tag.id)}
+                  checked={filterTagsLower.includes(tag.name.toLowerCase())}
+                  onChange={() => handleTagToggle(tag.name)}
                 />
                 <span
                   className={styles.tagLabel}

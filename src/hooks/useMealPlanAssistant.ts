@@ -153,9 +153,12 @@ function migrateOldConfig(oldConfig: MealPlanConfig, mealSlots: MealSlot[]): Mea
       slots: mealSlots.map((slot) => {
         const isEnabled = !isSkipped && selectedSlots.includes(slot.id);
         // Apply old day-level tags to all enabled slots on that day
+        // Handle both old tagIds field and new tags field
+        const tagNames = (dayRule as { tags?: string[]; tagIds?: string[] })?.tags ||
+                        (dayRule as { tagIds?: string[] })?.tagIds || [];
         const tagConfig =
-          dayRule && dayRule.tagIds.length > 0 && isEnabled
-            ? { tagIds: dayRule.tagIds, priority: dayRule.priority }
+          tagNames.length > 0 && isEnabled
+            ? { tags: tagNames, priority: dayRule!.priority }
             : undefined;
 
         return {
@@ -179,7 +182,7 @@ function migrateOldConfig(oldConfig: MealPlanConfig, mealSlots: MealSlot[]): Mea
 
 export function useMealPlanAssistant({
   mealSlots,
-  tags,
+  tags: _tags,
   defaultServings = 4,
   onComplete,
   restoreFromStorage = false,
@@ -194,12 +197,9 @@ export function useMealPlanAssistant({
 
   // Restore state from storage when requested
   useEffect(() => {
-    console.log('Restore effect:', { restoreFromStorage, hasRestored });
     if (restoreFromStorage && !hasRestored) {
       const stored = loadStoredState();
-      console.log('Loaded stored state:', stored);
       if (stored) {
-        console.log('Restoring meal plan state from storage');
         // Map old step names to new ones
         let step = stored.currentStep;
         if (step === ('dayRules' as AssistantStep) || step === ('dateRange' as AssistantStep)) {
@@ -215,17 +215,13 @@ export function useMealPlanAssistant({
         setConfig(migrateOldConfig(restoredConfig, mealSlots));
         setGeneratedPlan(stored.generatedPlan);
         clearStoredState();
-      } else {
-        console.log('No stored state found');
       }
       setHasRestored(true);
     }
   }, [restoreFromStorage, hasRestored, mealSlots]);
 
-  // Tag name lookup
-  const tagNamesById = useMemo(() => {
-    return new Map(tags.map((t) => [t.id, t.name]));
-  }, [tags]);
+  // Note: tagNamesById is no longer needed since tags are identified by name directly
+  // Kept as empty map for API compatibility with generateMealPlan
 
   // Step navigation
   const currentStepIndex = STEP_ORDER.indexOf(currentStep);
@@ -416,7 +412,7 @@ export function useMealPlanAssistant({
     setError(null);
 
     try {
-      const plan = await generateMealPlan(config, mealSlots, tagNamesById);
+      const plan = await generateMealPlan(config, mealSlots);
       setGeneratedPlan(plan);
 
       if (plan.warnings.length > 0) {
@@ -428,7 +424,7 @@ export function useMealPlanAssistant({
     } finally {
       setIsGenerating(false);
     }
-  }, [config, mealSlots, tagNamesById]);
+  }, [config, mealSlots]);
 
   // Preview actions
   const swapMeal = useCallback(
@@ -553,7 +549,6 @@ export function useMealPlanAssistant({
         } as StoredState['config'],
         generatedPlan,
       };
-      console.log('Saving meal plan state to storage:', state);
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
       console.error('Failed to save meal plan state:', e);

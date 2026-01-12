@@ -23,7 +23,7 @@ export interface PlatecraftExport {
   externalCalendars: import('./calendar').ExternalCalendar[];
 }
 
-export const CURRENT_EXPORT_VERSION = '1.1';
+export const CURRENT_EXPORT_VERSION = '1.2'; // v1.2: Name-based tags
 
 // Re-export encryption types from cryptoService
 export type { EncryptedField, EncryptedExport } from '@/services/cryptoService';

@@ -11,9 +11,8 @@ import type {
   ExternalEvent,
   UserSettings,
 } from '@/types';
-import { SYSTEM_TAGS } from '@/types/tags';
+import { DEFAULT_TAGS, type LegacyTag } from '@/types/tags';
 import { DEFAULT_SETTINGS } from '@/types/settings';
-import { v4 as uuidv4 } from 'uuid';
 
 export class PlatecraftDatabase extends Dexie {
   recipes!: Table<Recipe, string>;
@@ -55,20 +54,91 @@ export class PlatecraftDatabase extends Dexie {
       externalEvents: 'id, calendarId, [calendarId+startTime]',
       settings: 'id',
     });
+
+    // Version 3: Simplify tags - keep id as PK (Dexie limitation), but use name as unique identifier
+    // Remove isSystem from index (field will be ignored)
+    this.version(3)
+      .stores({
+        recipes: 'id, title, *tags, isFavorite, createdAt, updatedAt',
+        tags: 'id, &name', // Keep id as PK, add unique index on name
+        plannedMeals: 'id, date, slotId, recipeId, [date+slotId]',
+        dayNotes: 'id, date',
+        recurringMeals: 'id, recipeId, dayOfWeek, slotId',
+        shoppingLists: 'id, createdAt',
+        shoppingItems: 'id, shoppingListId, isChecked, storeSection',
+        externalCalendars: 'id, provider',
+        externalEvents: 'id, calendarId, [calendarId+startTime]',
+        settings: 'id',
+      })
+      .upgrade(async (tx) => {
+        console.log('[Migration v3] Starting tag system migration...');
+
+        // 1. Get all old tags and build ID->Name mapping
+        const oldTags = (await tx.table('tags').toArray()) as LegacyTag[];
+        const idToName = new Map<string, string>();
+        oldTags.forEach((tag) => {
+          idToName.set(tag.id, tag.name);
+        });
+        console.log(`[Migration v3] Found ${oldTags.length} old tags`);
+
+        // 2. Convert all recipe tag arrays from IDs to names
+        const recipes = await tx.table('recipes').toArray();
+        let recipesUpdated = 0;
+        for (const recipe of recipes) {
+          if (recipe.tags && recipe.tags.length > 0) {
+            // Convert IDs to names
+            const names = recipe.tags
+              .map((tagId: string) => idToName.get(tagId))
+              .filter((name: string | undefined): name is string => !!name);
+
+            // Deduplicate case-insensitively (keep first occurrence's casing)
+            const seenLower = new Set<string>();
+            const uniqueNames: string[] = [];
+            for (const name of names) {
+              const lower = name.toLowerCase();
+              if (!seenLower.has(lower)) {
+                seenLower.add(lower);
+                uniqueNames.push(name);
+              }
+            }
+
+            await tx.table('recipes').update(recipe.id, { tags: uniqueNames });
+            recipesUpdated++;
+          }
+        }
+        console.log(`[Migration v3] Updated tags on ${recipesUpdated} recipes`);
+
+        // 3. Update tags table - remove isSystem/isHidden, set id=name for new lookups
+        // We keep existing tags but clean up the structure
+        const seenNames = new Set<string>();
+        for (const oldTag of oldTags) {
+          const lowerName = oldTag.name.toLowerCase();
+          if (!seenNames.has(lowerName)) {
+            seenNames.add(lowerName);
+            // Update to remove isSystem/isHidden, keep id unchanged
+            await tx.table('tags').update(oldTag.id, {
+              name: oldTag.name,
+              color: oldTag.color,
+              isSystem: undefined,
+              isHidden: undefined,
+            });
+          } else {
+            // Delete duplicate (case-insensitive)
+            await tx.table('tags').delete(oldTag.id);
+          }
+        }
+        console.log(`[Migration v3] Updated ${seenNames.size} tags`);
+
+        console.log('[Migration v3] Migration complete!');
+      });
   }
 
   async initialize(): Promise<void> {
-    // Clean up duplicate system tags first
-    await this.deduplicateSystemTags();
-
-    // Initialize system tags if they don't exist
-    const existingTags = await this.tags.filter((tag) => tag.isSystem === true).count();
-    if (existingTags === 0) {
-      const systemTags: Tag[] = SYSTEM_TAGS.map((tag) => ({
-        ...tag,
-        id: uuidv4(),
-      }));
-      await this.tags.bulkAdd(systemTags);
+    // Initialize default tags if none exist
+    const existingTagCount = await this.tags.count();
+    if (existingTagCount === 0) {
+      console.log('[Initialize] Adding default tags');
+      await this.tags.bulkAdd(DEFAULT_TAGS);
     }
 
     // Initialize settings if they don't exist
@@ -97,29 +167,6 @@ export class PlatecraftDatabase extends Dexie {
           sourceType: c.icalUrl ? 'url' : 'file',
         }))
       );
-    }
-  }
-
-  async deduplicateSystemTags(): Promise<void> {
-    const allTags = await this.tags.toArray();
-    const seen = new Map<string, Tag>();
-    const duplicateIds: string[] = [];
-
-    for (const tag of allTags) {
-      if (tag.isSystem) {
-        const key = tag.name.toLowerCase();
-        if (seen.has(key)) {
-          // This is a duplicate - mark for deletion
-          duplicateIds.push(tag.id);
-        } else {
-          seen.set(key, tag);
-        }
-      }
-    }
-
-    if (duplicateIds.length > 0) {
-      console.log(`Removing ${duplicateIds.length} duplicate system tags`);
-      await this.tags.bulkDelete(duplicateIds);
     }
   }
 }

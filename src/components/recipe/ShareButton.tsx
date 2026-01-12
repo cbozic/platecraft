@@ -20,7 +20,7 @@ export function ShareButton({ recipe, variant = 'button', size = 'md' }: ShareBu
   useEffect(() => {
     const loadTags = async () => {
       if (recipe.tags.length > 0) {
-        const tagData = await tagRepository.getByIds(recipe.tags);
+        const tagData = await tagRepository.getByNames(recipe.tags);
         setTags(tagData);
       }
     };

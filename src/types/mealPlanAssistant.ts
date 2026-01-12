@@ -17,7 +17,7 @@ export interface IngredientOnHand {
  */
 export interface DayTagRule {
   dayOfWeek: number; // 0 = Sunday, 6 = Saturday
-  tagIds: string[];
+  tags: string[]; // Tag names
   priority: 'required' | 'preferred';
 }
 
@@ -34,7 +34,7 @@ export interface MealSlotSelection {
  * Tag configuration for a specific meal slot on a day
  */
 export interface MealSlotTagConfig {
-  tagIds: string[];
+  tags: string[]; // Tag names
   priority: 'required' | 'preferred';
 }
 

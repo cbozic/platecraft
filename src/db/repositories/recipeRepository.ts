@@ -31,10 +31,15 @@ export const recipeRepository = {
       .toArray();
   },
 
-  async getByTags(tagIds: string[]): Promise<Recipe[]> {
-    if (tagIds.length === 0) return this.getAll();
+  async getByTags(tagNames: string[]): Promise<Recipe[]> {
+    if (tagNames.length === 0) return this.getAll();
+    const lowerNames = tagNames.map((n) => n.toLowerCase());
     return db.recipes
-      .filter((recipe) => tagIds.some((tagId) => recipe.tags.includes(tagId)))
+      .filter((recipe) =>
+        lowerNames.some((name) =>
+          recipe.tags.some((t) => t.toLowerCase() === name)
+        )
+      )
       .toArray();
   },
 

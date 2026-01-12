@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Modal, Button } from '@/components/ui';
 import type { Recipe } from '@/types';
 import type { Tag } from '@/types/tags';
@@ -11,7 +10,7 @@ interface BulkTagModalProps {
   mode: 'add' | 'remove';
   selectedRecipes: Recipe[];
   allTags: Tag[];
-  onConfirm: (tagIds: string[]) => void;
+  onConfirm: (tagNames: string[]) => void;
 }
 
 export function BulkTagModal({
@@ -22,50 +21,54 @@ export function BulkTagModal({
   allTags,
   onConfirm,
 }: BulkTagModalProps) {
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [showAllTags, setShowAllTags] = useState(false);
-
-  const VISIBLE_TAG_COUNT = 12;
+  const [selectedTagNames, setSelectedTagNames] = useState<string[]>([]);
 
   // For remove mode, only show tags that exist on at least one selected recipe
   const availableTags = useMemo(() => {
     if (mode === 'add') {
       return allTags;
     }
-    const tagIdsOnSelectedRecipes = new Set<string>();
+    // Collect all tag names from selected recipes (case-insensitive unique)
+    const tagNamesOnSelectedRecipes = new Set<string>();
     selectedRecipes.forEach((recipe) => {
-      recipe.tags.forEach((tagId) => tagIdsOnSelectedRecipes.add(tagId));
+      recipe.tags.forEach((tagName) => tagNamesOnSelectedRecipes.add(tagName.toLowerCase()));
     });
-    return allTags.filter((tag) => tagIdsOnSelectedRecipes.has(tag.id));
+    return allTags.filter((tag) => tagNamesOnSelectedRecipes.has(tag.name.toLowerCase()));
   }, [mode, allTags, selectedRecipes]);
 
   // Sort alphabetically
   const sortedTags = [...availableTags].sort((a, b) => a.name.localeCompare(b.name));
-  const visibleTags = showAllTags ? sortedTags : sortedTags.slice(0, VISIBLE_TAG_COUNT);
-  const hasMoreTags = sortedTags.length > VISIBLE_TAG_COUNT;
 
-  const handleTagToggle = (tagId: string) => {
-    setSelectedTagIds((prev) =>
-      prev.includes(tagId) ? prev.filter((t) => t !== tagId) : [...prev, tagId]
+  const isTagSelected = (tagName: string) => {
+    const tagNameLower = tagName.toLowerCase();
+    return selectedTagNames.some((t) => t.toLowerCase() === tagNameLower);
+  };
+
+  const handleTagToggle = (tagName: string) => {
+    const tagNameLower = tagName.toLowerCase();
+    setSelectedTagNames((prev) =>
+      isTagSelected(tagName)
+        ? prev.filter((t) => t.toLowerCase() !== tagNameLower)
+        : [...prev, tagName]
     );
   };
 
   const handleConfirm = () => {
-    onConfirm(selectedTagIds);
-    setSelectedTagIds([]);
+    onConfirm(selectedTagNames);
+    setSelectedTagNames([]);
     onClose();
   };
 
   const handleClose = () => {
-    setSelectedTagIds([]);
+    setSelectedTagNames([]);
     onClose();
   };
 
   const title = mode === 'add' ? 'Add Tags' : 'Remove Tags';
   const confirmText =
     mode === 'add'
-      ? `Add ${selectedTagIds.length > 0 ? selectedTagIds.length : ''} tag${selectedTagIds.length !== 1 ? 's' : ''} to ${selectedRecipes.length} recipe${selectedRecipes.length !== 1 ? 's' : ''}`
-      : `Remove ${selectedTagIds.length > 0 ? selectedTagIds.length : ''} tag${selectedTagIds.length !== 1 ? 's' : ''} from ${selectedRecipes.length} recipe${selectedRecipes.length !== 1 ? 's' : ''}`;
+      ? `Add ${selectedTagNames.length > 0 ? selectedTagNames.length : ''} tag${selectedTagNames.length !== 1 ? 's' : ''} to ${selectedRecipes.length} recipe${selectedRecipes.length !== 1 ? 's' : ''}`
+      : `Remove ${selectedTagNames.length > 0 ? selectedTagNames.length : ''} tag${selectedTagNames.length !== 1 ? 's' : ''} from ${selectedRecipes.length} recipe${selectedRecipes.length !== 1 ? 's' : ''}`;
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title={title} size="md">
@@ -85,12 +88,12 @@ export function BulkTagModal({
             </p>
 
             <div className={styles.tagGrid}>
-              {visibleTags.map((tag) => (
-                <label key={tag.id} className={styles.tagCheckbox}>
+              {sortedTags.map((tag) => (
+                <label key={tag.name} className={styles.tagCheckbox}>
                   <input
                     type="checkbox"
-                    checked={selectedTagIds.includes(tag.id)}
-                    onChange={() => handleTagToggle(tag.id)}
+                    checked={isTagSelected(tag.name)}
+                    onChange={() => handleTagToggle(tag.name)}
                   />
                   <span
                     className={styles.tagLabel}
@@ -101,25 +104,6 @@ export function BulkTagModal({
                 </label>
               ))}
             </div>
-
-            {hasMoreTags && (
-              <button
-                className={styles.showMoreButton}
-                onClick={() => setShowAllTags(!showAllTags)}
-              >
-                {showAllTags ? (
-                  <>
-                    <ChevronUp size={14} />
-                    Show less
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown size={14} />
-                    Show all {sortedTags.length} tags
-                  </>
-                )}
-              </button>
-            )}
           </>
         )}
       </div>
@@ -131,7 +115,7 @@ export function BulkTagModal({
         <Button
           variant={mode === 'add' ? 'primary' : 'danger'}
           onClick={handleConfirm}
-          disabled={selectedTagIds.length === 0}
+          disabled={selectedTagNames.length === 0}
         >
           {confirmText}
         </Button>

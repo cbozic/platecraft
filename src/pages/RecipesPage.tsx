@@ -67,6 +67,7 @@ function filtersToParams(filters: RecipeFilters): URLSearchParams {
 interface LocationState {
   searchQuery?: string;
   searchParams?: string;
+  viewMode?: 'grid' | 'table';
 }
 
 export function RecipesPage() {
@@ -100,7 +101,7 @@ export function RecipesPage() {
       try {
         const [recipesData, tagsData] = await Promise.all([
           recipeRepository.getAll(),
-          tagRepository.getVisibleTags(),
+          tagRepository.getAll(),
         ]);
         setRecipes(recipesData);
         setAllTags(tagsData);
@@ -114,7 +115,7 @@ export function RecipesPage() {
     loadData();
   }, []);
 
-  // Restore search state when navigating back from recipe
+  // Restore search state and view mode when navigating back from recipe
   useEffect(() => {
     const state = location.state as LocationState | null;
     if (state?.searchQuery !== undefined) {
@@ -122,6 +123,9 @@ export function RecipesPage() {
     }
     if (state?.searchParams) {
       setSearchParams(new URLSearchParams(state.searchParams), { replace: true });
+    }
+    if (state?.viewMode) {
+      setViewMode(state.viewMode);
     }
     // Clear the state after using it
     if (state) {
@@ -144,7 +148,10 @@ export function RecipesPage() {
 
       // Tag filter (OR logic - recipe must have at least one selected tag)
       if (filters.tags.length > 0) {
-        if (!filters.tags.some((tagId) => recipe.tags.includes(tagId))) {
+        const filterTagsLower = filters.tags.map((t) => t.toLowerCase());
+        if (!filterTagsLower.some((tagName) =>
+          recipe.tags.some((t) => t.toLowerCase() === tagName)
+        )) {
           return false;
         }
       }
@@ -230,10 +237,10 @@ export function RecipesPage() {
     });
   };
 
-  const handleSingleRecipeTagsChange = async (recipeId: string, tagIds: string[]) => {
-    await recipeRepository.update(recipeId, { tags: tagIds });
+  const handleSingleRecipeTagsChange = async (recipeId: string, tagNames: string[]) => {
+    await recipeRepository.update(recipeId, { tags: tagNames });
     setRecipes((prev) =>
-      prev.map((r) => (r.id === recipeId ? { ...r, tags: tagIds, updatedAt: new Date() } : r))
+      prev.map((r) => (r.id === recipeId ? { ...r, tags: tagNames, updatedAt: new Date() } : r))
     );
   };
 
@@ -249,17 +256,18 @@ export function RecipesPage() {
     setSelectedRecipeIds(new Set());
   };
 
-  const handleBulkTagsChange = async (tagIds: string[]) => {
-    if (tagIds.length === 0) return;
+  const handleBulkTagsChange = async (tagNames: string[]) => {
+    if (tagNames.length === 0) return;
 
+    const tagNamesLower = tagNames.map((t) => t.toLowerCase());
     const updates = [...selectedRecipeIds].map(async (recipeId) => {
       const recipe = recipes.find((r) => r.id === recipeId);
       if (!recipe) return;
 
       const newTags =
         bulkTagMode === 'add'
-          ? [...new Set([...recipe.tags, ...tagIds])]
-          : recipe.tags.filter((t) => !tagIds.includes(t));
+          ? [...new Set([...recipe.tags, ...tagNames])]
+          : recipe.tags.filter((t) => !tagNamesLower.includes(t.toLowerCase()));
 
       await recipeRepository.update(recipeId, { tags: newTags });
       return { recipeId, newTags };
@@ -388,6 +396,7 @@ export function RecipesPage() {
                 from: 'recipes',
                 searchQuery,
                 searchParams: searchParams.toString(),
+                viewMode,
               }}
             >
               <Card hoverable padding="none">
@@ -455,6 +464,12 @@ export function RecipesPage() {
           onToggleFavorite={handleToggleFavorite}
           onDelete={handleDeleteRecipe}
           onTagsChange={handleSingleRecipeTagsChange}
+          navigationState={{
+            from: 'recipes',
+            searchQuery,
+            searchParams: searchParams.toString(),
+            viewMode,
+          }}
         />
       )}
 

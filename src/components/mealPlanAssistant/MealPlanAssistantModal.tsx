@@ -50,9 +50,7 @@ export function MealPlanAssistantModal({
 
   // Reset when modal opens (unless resuming an existing plan)
   useEffect(() => {
-    console.log('Modal reset effect:', { isOpen, resumePlan });
     if (isOpen && !resumePlan) {
-      console.log('Resetting assistant');
       assistant.reset();
     }
   }, [isOpen, resumePlan]);
@@ -132,7 +130,7 @@ export function MealPlanAssistantModal({
               endDate={assistant.config.endDate}
               weekdayConfigs={assistant.config.weekdayConfigs}
               mealSlots={mealSlots}
-              availableTags={tags.filter((t) => !t.isHidden).sort((a, b) => a.name.localeCompare(b.name))}
+              availableTags={[...tags].sort((a, b) => a.name.localeCompare(b.name))}
               weekStartsOn={weekStartsOn}
               defaultServings={assistant.config.defaultServings}
               favoritesWeight={assistant.config.favoritesWeight}

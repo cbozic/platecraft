@@ -240,15 +240,11 @@ export function ReprocessModal({
     for (const result of results) {
       const isSelected = selectedChanges.get(result.recipeId);
       if (isSelected && result.proposedChanges.length > 0) {
-        console.log('Adding changes for recipe:', result.recipeId, result.recipeTitle);
-        console.log('Proposed changes:', result.proposedChanges);
         changesToApply.set(result.recipeId, result.proposedChanges);
       }
     }
 
-    console.log('Total changes to apply:', changesToApply.size);
     const applyResultData = await recipeReprocessingService.applyChanges(changesToApply);
-    console.log('Apply result:', applyResultData);
     setApplyResult(applyResultData);
     setStep('complete');
   };
@@ -449,11 +445,6 @@ export function ReprocessModal({
   );
 
   const renderReview = () => {
-    console.log('Rendering review step');
-    console.log('Results:', results.length);
-    console.log('Recipes with changes:', recipesWithChanges.length);
-    console.log('Selected changes map size:', selectedChanges.size);
-
     return (
       <>
         <div className={styles.content}>

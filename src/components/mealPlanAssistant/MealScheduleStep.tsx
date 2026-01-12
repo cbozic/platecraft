@@ -211,30 +211,33 @@ export function MealScheduleStep({
     });
   };
 
-  const handleTagToggle = (dayOfWeek: number, slotId: string, tagId: string) => {
+  const handleTagToggle = (dayOfWeek: number, slotId: string, tagName: string) => {
     const dayConfig = weekdayConfigs.find((dc) => dc.dayOfWeek === dayOfWeek);
     const slotConfig = dayConfig?.slots.find((s) => s.slotId === slotId);
-    const currentTags = slotConfig?.tagConfig?.tagIds || [];
+    const currentTags = slotConfig?.tagConfig?.tags || [];
     const currentPriority = slotConfig?.tagConfig?.priority || 'preferred';
 
-    const newTagIds = currentTags.includes(tagId)
-      ? currentTags.filter((id) => id !== tagId)
-      : [...currentTags, tagId];
+    // Case-insensitive check for existing tag
+    const tagNameLower = tagName.toLowerCase();
+    const isSelected = currentTags.some((t) => t.toLowerCase() === tagNameLower);
+    const newTags = isSelected
+      ? currentTags.filter((t) => t.toLowerCase() !== tagNameLower)
+      : [...currentTags, tagName];
 
-    if (newTagIds.length === 0) {
+    if (newTags.length === 0) {
       onUpdateMealSlotTags(dayOfWeek, slotId, undefined);
     } else {
-      onUpdateMealSlotTags(dayOfWeek, slotId, { tagIds: newTagIds, priority: currentPriority });
+      onUpdateMealSlotTags(dayOfWeek, slotId, { tags: newTags, priority: currentPriority });
     }
   };
 
   const handlePriorityChange = (dayOfWeek: number, slotId: string, priority: 'required' | 'preferred') => {
     const dayConfig = weekdayConfigs.find((dc) => dc.dayOfWeek === dayOfWeek);
     const slotConfig = dayConfig?.slots.find((s) => s.slotId === slotId);
-    const currentTags = slotConfig?.tagConfig?.tagIds || [];
+    const currentTags = slotConfig?.tagConfig?.tags || [];
 
     if (currentTags.length > 0) {
-      onUpdateMealSlotTags(dayOfWeek, slotId, { tagIds: currentTags, priority });
+      onUpdateMealSlotTags(dayOfWeek, slotId, { tags: currentTags, priority });
     }
   };
 
@@ -267,14 +270,15 @@ export function MealScheduleStep({
       const slotConfig = dayConfig?.slots.find((s) => s.slotId === slotId);
 
       if (slotConfig?.isEnabled) {
-        const existingTags = slotConfig.tagConfig?.tagIds || [];
-        const newTagIds = tags
-          .map((tag) => tag.id)
-          .filter((tagId) => !existingTags.includes(tagId));
+        const existingTags = slotConfig.tagConfig?.tags || [];
+        const existingTagsLower = existingTags.map((t) => t.toLowerCase());
+        const newTagNames = tags
+          .map((tag) => tag.name)
+          .filter((tagName) => !existingTagsLower.includes(tagName.toLowerCase()));
 
-        if (newTagIds.length > 0) {
+        if (newTagNames.length > 0) {
           onUpdateMealSlotTags(dayOfWeek, slotId, {
-            tagIds: [...existingTags, ...newTagIds],
+            tags: [...existingTags, ...newTagNames],
             priority: slotConfig.tagConfig?.priority || 'preferred',
           });
         }
@@ -443,7 +447,7 @@ export function MealScheduleStep({
                   {mealSlots.map((slot) => {
                     const slotConfig = dayConfig?.slots.find((s) => s.slotId === slot.id);
                     const isEnabled = slotConfig?.isEnabled ?? false;
-                    const hasTagConfig = slotConfig?.tagConfig && slotConfig.tagConfig.tagIds.length > 0;
+                    const hasTagConfig = slotConfig?.tagConfig && slotConfig.tagConfig.tags.length > 0;
                     const isExpanded = expandedSlots.has(`${dayIndex}-${slot.id}`);
 
                     return (
@@ -474,13 +478,16 @@ export function MealScheduleStep({
                           <div className={styles.tagConfigPanel}>
                             <div className={styles.tagList}>
                               {availableTags.map((tag) => {
-                                const isSelected = slotConfig?.tagConfig?.tagIds.includes(tag.id) ?? false;
+                                const tagNameLower = tag.name.toLowerCase();
+                                const isSelected = slotConfig?.tagConfig?.tags.some(
+                                  (t) => t.toLowerCase() === tagNameLower
+                                ) ?? false;
                                 return (
                                   <button
-                                    key={tag.id}
+                                    key={tag.name}
                                     type="button"
                                     className={`${styles.tagChip} ${isSelected ? styles.selected : ''}`}
-                                    onClick={() => handleTagToggle(dayIndex, slot.id, tag.id)}
+                                    onClick={() => handleTagToggle(dayIndex, slot.id, tag.name)}
                                   >
                                     {tag.name}
                                   </button>

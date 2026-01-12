@@ -375,16 +375,11 @@ export const recipeReprocessingService = {
     let success = 0;
     let failed = 0;
 
-    console.log('applyChanges called with', changes.size, 'recipes');
-
     for (const [recipeId, fieldChanges] of changes.entries()) {
       try {
         const updates: Partial<RecipeFormData> = {};
 
-        console.log('Processing recipe:', recipeId, 'with', fieldChanges.length, 'changes');
-
         for (const change of fieldChanges) {
-          console.log('  Change:', change.field, '=', change.newValue);
           switch (change.field) {
             case 'nutrition':
               updates.nutrition = change.newValue as NutritionInfo;
@@ -401,13 +396,9 @@ export const recipeReprocessingService = {
           }
         }
 
-        console.log('Updates object:', updates);
-
         // Only update if we have changes to apply
         if (Object.keys(updates).length > 0) {
-          console.log('Calling recipeRepository.update for', recipeId);
           await recipeRepository.update(recipeId, updates);
-          console.log('Update successful for', recipeId);
           success++;
         }
       } catch (error) {

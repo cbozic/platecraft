@@ -16,6 +16,13 @@ export interface SortConfig {
   direction: SortDirection;
 }
 
+interface NavigationState {
+  from: string;
+  searchQuery: string;
+  searchParams: string;
+  viewMode: 'grid' | 'table';
+}
+
 interface RecipeTableViewProps {
   recipes: Recipe[];
   tags: Tag[];
@@ -25,7 +32,8 @@ interface RecipeTableViewProps {
   onSortChange: (config: SortConfig) => void;
   onToggleFavorite: (recipeId: string) => void;
   onDelete: (recipeId: string) => void;
-  onTagsChange: (recipeId: string, tagIds: string[]) => void;
+  onTagsChange: (recipeId: string, tagNames: string[]) => void;
+  navigationState?: NavigationState;
 }
 
 function formatTime(minutes?: number): string {
@@ -54,6 +62,7 @@ export function RecipeTableView({
   onToggleFavorite,
   onDelete,
   onTagsChange,
+  navigationState,
 }: RecipeTableViewProps) {
   const [tagPopupRecipeId, setTagPopupRecipeId] = useState<string | null>(null);
   const tagCellRefs = useRef<Map<string, HTMLTableCellElement>>(new Map());
@@ -97,7 +106,7 @@ export function RecipeTableView({
 
   const getRecipeTags = (recipe: Recipe): Tag[] => {
     return recipe.tags
-      .map((tagId) => tags.find((t) => t.id === tagId))
+      .map((tagName) => tags.find((t) => t.name.toLowerCase() === tagName.toLowerCase()))
       .filter((t): t is Tag => t !== undefined);
   };
 
@@ -106,8 +115,8 @@ export function RecipeTableView({
     setTagPopupRecipeId(tagPopupRecipeId === recipeId ? null : recipeId);
   };
 
-  const handleTagsUpdate = (recipeId: string, tagIds: string[]) => {
-    onTagsChange(recipeId, tagIds);
+  const handleTagsUpdate = (recipeId: string, tagNames: string[]) => {
+    onTagsChange(recipeId, tagNames);
     setTagPopupRecipeId(null);
   };
 
@@ -185,7 +194,11 @@ export function RecipeTableView({
                   />
                 </td>
                 <td className={styles.titleCell}>
-                  <Link to={`/recipes/${recipe.id}`} className={styles.titleLink}>
+                  <Link
+                    to={`/recipes/${recipe.id}`}
+                    className={styles.titleLink}
+                    state={navigationState}
+                  >
                     {recipe.title}
                   </Link>
                 </td>
@@ -205,7 +218,7 @@ export function RecipeTableView({
                       <>
                         {visibleTags.map((tag) => (
                           <span
-                            key={tag.id}
+                            key={tag.name}
                             className={styles.tagPill}
                             style={tag.color ? { backgroundColor: tag.color } : undefined}
                           >
@@ -222,10 +235,10 @@ export function RecipeTableView({
                   </div>
                   {tagPopupRecipeId === recipe.id && (
                     <TagEditPopup
-                      selectedTagIds={recipe.tags}
+                      selectedTagNames={recipe.tags}
                       allTags={tags}
                       onClose={() => setTagPopupRecipeId(null)}
-                      onChange={(tagIds) => handleTagsUpdate(recipe.id, tagIds)}
+                      onChange={(tagNames) => handleTagsUpdate(recipe.id, tagNames)}
                       anchorEl={tagCellRefs.current.get(recipe.id) ?? null}
                     />
                   )}

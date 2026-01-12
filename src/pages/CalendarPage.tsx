@@ -88,7 +88,6 @@ export function CalendarPage() {
 
   // Restore calendar state when navigating back from recipe
   useEffect(() => {
-    console.log('CalendarPage state restoration effect:', { state, openMealPlanAssistant: state?.openMealPlanAssistant });
     if (state?.view) {
       setView(state.view);
     }
@@ -97,7 +96,6 @@ export function CalendarPage() {
       goToDate(restoredDate);
     }
     if (state?.openMealPlanAssistant) {
-      console.log('Setting resumingPlan and planAssistantOpen to true');
       setResumingPlan(true);
       setPlanAssistantOpen(true);
     }

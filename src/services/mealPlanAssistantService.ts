@@ -452,7 +452,21 @@ function pickRecipeWithFavoritesWeight(
 }
 
 /**
- * Find recipe matching slot's tag config
+ * Count how many of the configured tag names a recipe matches
+ * Recipe.tags are now directly tag names (not IDs)
+ */
+function countMatchingTagNames(
+  recipe: Recipe,
+  configTagNames: Set<string>
+): number {
+  // Recipe.tags are already names - just compare directly (case-insensitive)
+  const recipeTagNamesLower = recipe.tags.map((name) => name.toLowerCase());
+  return recipeTagNamesLower.filter((name) => configTagNames.has(name)).length;
+}
+
+/**
+ * Find recipe matching slot's tag config, preferring recipes that match more tags
+ * tagConfig.tags are tag names (not IDs), recipe.tags are also names
  */
 function findTagMatchingRecipe(
   recipes: Recipe[],
@@ -460,23 +474,35 @@ function findTagMatchingRecipe(
   usedRecipes: Set<string>,
   favoritesWeight: number = 50
 ): Recipe | null {
-  if (!tagConfig || tagConfig.tagIds.length === 0) {
+  if (!tagConfig || tagConfig.tags.length === 0) {
     return null;
   }
 
-  const matching = recipes.filter(
-    (r) =>
-      !usedRecipes.has(r.id) &&
-      tagConfig.tagIds.some((tagId) => r.tags.includes(tagId))
+  // Build set of config tag names (lowercase for case-insensitive matching)
+  const configTagNames = new Set(
+    tagConfig.tags.map((name) => name.toLowerCase())
   );
 
-  if (matching.length > 0) {
-    return pickRecipeWithFavoritesWeight(matching, favoritesWeight);
+  // Score recipes by how many tags they match (by name)
+  const scoredRecipes = recipes
+    .filter((r) => !usedRecipes.has(r.id))
+    .map((recipe) => ({
+      recipe,
+      tagMatchCount: countMatchingTagNames(recipe, configTagNames),
+    }))
+    .filter((r) => r.tagMatchCount > 0); // Must match at least one tag
+
+  if (scoredRecipes.length === 0) {
+    return null;
   }
 
-  // For required tags, return null if no match (will use fallback)
-  // For preferred tags, also return null (will use fallback)
-  return null;
+  // Group by tag match count (descending) and pick from the best group
+  const maxTagMatches = Math.max(...scoredRecipes.map((r) => r.tagMatchCount));
+  const bestMatches = scoredRecipes
+    .filter((r) => r.tagMatchCount === maxTagMatches)
+    .map((r) => r.recipe);
+
+  return pickRecipeWithFavoritesWeight(bestMatches, favoritesWeight);
 }
 
 /**
@@ -524,6 +550,7 @@ interface RecipeUsageTracker {
 
 /**
  * Find a recipe for reuse, maximizing time since last use
+ * tagConfig.tags are tag names, recipe.tags are also names
  */
 function findRecipeForReuse(
   recipes: Recipe[],
@@ -533,13 +560,15 @@ function findRecipeForReuse(
 ): Recipe | null {
   if (recipes.length === 0) return null;
 
-  // Get tag IDs from config
-  const preferredTagIds = tagConfig?.tagIds || [];
+  // Build name set from config (lowercase for case-insensitive matching)
+  const configTagNames = new Set(
+    (tagConfig?.tags || []).map((name) => name.toLowerCase())
+  );
 
   // Calculate the favorites bonus based on weight (0-10 scale based on 0-100 weight)
   const favoritesBonus = (favoritesWeight / 100) * 10;
 
-  // Score each recipe by how long ago it was used and if it matches tags
+  // Score each recipe by how long ago it was used and how many tags it matches (by name)
   const scoredRecipes = recipes.map((recipe) => {
     const lastUsed = usageTracker.lastUsedAtSlot.get(recipe.id);
     // If never used, give maximum distance
@@ -547,9 +576,10 @@ function findRecipeForReuse(
       ? usageTracker.currentSlotIndex + recipes.length
       : usageTracker.currentSlotIndex - lastUsed;
 
-    // Bonus for matching tag config
-    const matchesTags = preferredTagIds.length > 0 &&
-      preferredTagIds.some((tagId) => recipe.tags.includes(tagId));
+    // Bonus for each matching tag (more tags = higher score)
+    const tagMatchCount = configTagNames.size > 0
+      ? countMatchingTagNames(recipe, configTagNames)
+      : 0;
 
     // Bonus for favorites (scaled by favoritesWeight)
     const isFavorite = recipe.isFavorite;
@@ -557,10 +587,10 @@ function findRecipeForReuse(
     return {
       recipe,
       distance,
-      matchesTags,
+      tagMatchCount,
       isFavorite,
-      // Combined score: distance is primary, with weighted bonuses
-      score: distance * 10 + (matchesTags ? 5 : 0) + (isFavorite ? favoritesBonus : 0),
+      // Combined score: distance is primary, with bonus per tag matched and favorites bonus
+      score: distance * 10 + (tagMatchCount * 5) + (isFavorite ? favoritesBonus : 0),
     };
   });
 
@@ -574,11 +604,13 @@ function findRecipeForReuse(
 
 /**
  * Main meal plan generation function
+ * Note: tagNamesById parameter is kept for API compatibility but no longer needed
+ * since recipe.tags and tagConfig.tags are both names now
  */
 export async function generateMealPlan(
   config: MealPlanConfig,
   mealSlots: MealSlot[],
-  tagNamesById: Map<string, string>
+  _tagNamesById?: Map<string, string>
 ): Promise<GeneratedMealPlan> {
   const warnings: string[] = [];
   const proposedMeals: ProposedMeal[] = [];
@@ -592,6 +624,7 @@ export async function generateMealPlan(
 
   // Get all recipes
   const allRecipes = await recipeRepository.getAll();
+
   if (allRecipes.length === 0) {
     warnings.push('No recipes found in your collection.');
     return {
@@ -626,11 +659,16 @@ export async function generateMealPlan(
 
       const tagConfig = getSlotTagConfig(config.weekdayConfigs, slot.dayOfWeek, slot.slotId);
 
+      // Build tag name set for this slot (lowercase for case-insensitive matching)
+      const configTagNamesLower = tagConfig
+        ? new Set(tagConfig.tags.map((name) => name.toLowerCase()))
+        : new Set<string>();
+
       // Find all valid recipes that:
       // a) Use available ingredients
       // b) Haven't been used yet
-      // c) Match slot's tag config if possible
-      const validCandidates: { score: RecipeMatchScore; recipe: Recipe; matchesTags: boolean }[] = [];
+      // c) Match slot's tag config if possible (count how many tags match by name)
+      const validCandidates: { score: RecipeMatchScore; recipe: Recipe; tagMatchCount: number }[] = [];
 
       for (const score of recipeScores) {
         if (usedRecipes.has(score.recipeId)) continue;
@@ -646,23 +684,27 @@ export async function generateMealPlan(
         const recipe = allRecipes.find((r) => r.id === score.recipeId);
         if (!recipe) continue;
 
-        const matchesTags = tagConfig && tagConfig.tagIds.length > 0 &&
-          tagConfig.tagIds.some((tagId) => recipe.tags.includes(tagId));
+        // Count tag matches by name (recipe.tags are now names)
+        const tagMatchCount = configTagNamesLower.size > 0
+          ? countMatchingTagNames(recipe, configTagNamesLower)
+          : 0;
 
-        validCandidates.push({ score, recipe, matchesTags: matchesTags || false });
+        validCandidates.push({ score, recipe, tagMatchCount });
       }
 
-      // Select from candidates: prefer tag matches, then use favorites weight
+      // Select from candidates: prefer recipes matching more tags, then use favorites weight
       let bestMatch: RecipeMatchScore | null = null;
       let selectedRecipe: Recipe | null = null;
 
       if (validCandidates.length > 0) {
-        // First priority: recipes matching slot's tag config
-        const tagMatches = validCandidates.filter((c) => c.matchesTags);
-        if (tagMatches.length > 0) {
-          const recipes = tagMatches.map((c) => c.recipe);
+        // First priority: recipes with the most tag matches
+        const maxTagMatches = Math.max(...validCandidates.map((c) => c.tagMatchCount));
+        if (maxTagMatches > 0) {
+          // Pick from candidates with the highest tag match count
+          const bestTagMatches = validCandidates.filter((c) => c.tagMatchCount === maxTagMatches);
+          const recipes = bestTagMatches.map((c) => c.recipe);
           selectedRecipe = pickRecipeWithFavoritesWeight(recipes, config.favoritesWeight);
-          bestMatch = tagMatches.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
+          bestMatch = bestTagMatches.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
         } else {
           // No tag matches, pick from all valid candidates using favorites weight
           const recipes = validCandidates.map((c) => c.recipe);
@@ -707,7 +749,7 @@ export async function generateMealPlan(
   for (const slot of [...slotsToFill]) {
     const tagConfig = getSlotTagConfig(config.weekdayConfigs, slot.dayOfWeek, slot.slotId);
 
-    if (tagConfig && tagConfig.tagIds.length > 0) {
+    if (tagConfig && tagConfig.tags.length > 0) {
       const recipe = findTagMatchingRecipe(allRecipes, tagConfig, usedRecipes, config.favoritesWeight);
 
       if (recipe) {
@@ -721,7 +763,11 @@ export async function generateMealPlan(
           slotsToFill.splice(slotIndex, 1);
         }
 
-        const matchedTagIds = tagConfig.tagIds.filter((tagId) => recipe.tags.includes(tagId));
+        // Find matched tags by name comparison (recipe.tags are names)
+        const configTagNamesLower = new Set(tagConfig.tags.map((name) => name.toLowerCase()));
+        const matchedTagNames = recipe.tags.filter((tagName) =>
+          configTagNamesLower.has(tagName.toLowerCase())
+        );
 
         proposedMeals.push({
           id: uuidv4(),
@@ -732,7 +778,7 @@ export async function generateMealPlan(
           recipeTitle: recipe.title,
           servings: config.defaultServings,
           matchType: 'tag',
-          matchedTags: matchedTagIds.map((id) => tagNamesById.get(id) || id),
+          matchedTags: matchedTagNames,
           isRejected: false,
           isLocked: false,
         });
@@ -753,13 +799,40 @@ export async function generateMealPlan(
   });
 
   for (const slot of [...slotsToFill]) {
-    // First try to find an unused recipe (using favorites weight)
-    let recipe = findFallbackRecipe(allRecipes, usedRecipes, config.favoritesWeight);
+    const tagConfig = getSlotTagConfig(config.weekdayConfigs, slot.dayOfWeek, slot.slotId);
+    let recipe: Recipe | null = null;
+    let isTagMatch = false;
+
+    // Build tag name set for this slot's config (lowercase for case-insensitive)
+    const configTagNamesLower = tagConfig
+      ? new Set(tagConfig.tags.map((name) => name.toLowerCase()))
+      : new Set<string>();
+
+    // First try to find an unused recipe that matches tags (if tags configured)
+    if (tagConfig && tagConfig.tags.length > 0) {
+      recipe = findTagMatchingRecipe(allRecipes, tagConfig, usedRecipes, config.favoritesWeight);
+      if (recipe) {
+        isTagMatch = true;
+      } else {
+        // Warn that no recipes matched the configured tags
+        const configuredTagNames = tagConfig.tags.join(', ');
+        warnings.push(`No recipes found matching tags [${configuredTagNames}] for ${slot.slotName} on ${slot.date}`);
+      }
+    }
+
+    // If no tag match found, try any unused recipe
+    if (!recipe) {
+      recipe = findFallbackRecipe(allRecipes, usedRecipes, config.favoritesWeight);
+    }
 
     // If no unused recipes, find a recipe to reuse with maximum spacing
     if (!recipe && allRecipes.length > 0) {
-      const tagConfig = getSlotTagConfig(config.weekdayConfigs, slot.dayOfWeek, slot.slotId);
       recipe = findRecipeForReuse(allRecipes, usageTracker, tagConfig, config.favoritesWeight);
+      // Check if reused recipe matches tags (recipe.tags are names)
+      if (recipe && configTagNamesLower.size > 0) {
+        const recipeTagNamesLower = recipe.tags.map((name) => name.toLowerCase());
+        isTagMatch = recipeTagNamesLower.some((name) => configTagNamesLower.has(name));
+      }
     }
 
     if (recipe) {
@@ -775,6 +848,11 @@ export async function generateMealPlan(
         slotsToFill.splice(slotIndex, 1);
       }
 
+      // Determine matched tags for display (recipe.tags are names)
+      const matchedTagNames = isTagMatch && tagConfig
+        ? recipe.tags.filter((tagName) => configTagNamesLower.has(tagName.toLowerCase()))
+        : [];
+
       proposedMeals.push({
         id: uuidv4(),
         date: slot.date,
@@ -783,7 +861,8 @@ export async function generateMealPlan(
         recipeId: recipe.id,
         recipeTitle: recipe.title,
         servings: config.defaultServings,
-        matchType: 'fallback',
+        matchType: isTagMatch ? 'tag' : 'fallback',
+        matchedTags: isTagMatch ? matchedTagNames : undefined,
         isRejected: false,
         isLocked: false,
       });
@@ -840,6 +919,7 @@ export async function generateMealPlan(
 
 /**
  * Find alternative recipes for swapping
+ * tagConfig.tags and recipe.tags are both names
  */
 export async function findAlternativeRecipes(
   currentRecipeId: string,
@@ -855,15 +935,23 @@ export async function findAlternativeRecipes(
   // Filter out used recipes and current recipe
   let candidates = allRecipes.filter((r) => r.id !== currentRecipeId && !usedSet.has(r.id));
 
-  // Prioritize recipes matching slot's tag config
+  // Prioritize recipes matching slot's tag config, sorted by number of matches
   const tagConfig = getSlotTagConfig(weekdayConfigs, dayOfWeek, slotId);
-  if (tagConfig && tagConfig.tagIds.length > 0) {
-    const tagIds = tagConfig.tagIds;
-    const matching = candidates.filter((r) => tagIds.some((tagId) => r.tags.includes(tagId)));
-    const nonMatching = candidates.filter((r) => !tagIds.some((tagId) => r.tags.includes(tagId)));
+  if (tagConfig && tagConfig.tags.length > 0) {
+    // Build set of config tag names (lowercase for case-insensitive)
+    const configTagNamesLower = new Set(
+      tagConfig.tags.map((name) => name.toLowerCase())
+    );
 
-    // Put matching recipes first
-    candidates = [...matching, ...nonMatching];
+    // Score each candidate by number of matching tags
+    const scored = candidates.map((r) => ({
+      recipe: r,
+      tagMatchCount: countMatchingTagNames(r, configTagNamesLower),
+    }));
+
+    // Sort by tag match count descending (more matches first), then non-matching
+    scored.sort((a, b) => b.tagMatchCount - a.tagMatchCount);
+    candidates = scored.map((s) => s.recipe);
   }
 
   return candidates.slice(0, limit);

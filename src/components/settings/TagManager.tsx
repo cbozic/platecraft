@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Eye, EyeOff, X, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Check } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import { tagRepository } from '@/db';
 import type { Tag } from '@/types';
@@ -10,10 +10,9 @@ export function TagManager() {
   const [isLoading, setIsLoading] = useState(true);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#6366f1');
-  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [editingTag, setEditingTag] = useState<string | null>(null); // tag name being edited
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
-  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     loadTags();
@@ -22,11 +21,8 @@ export function TagManager() {
   const loadTags = async () => {
     try {
       const allTags = await tagRepository.getAll();
-      // Sort: system tags first (alphabetically), then custom tags (alphabetically)
-      allTags.sort((a, b) => {
-        if (a.isSystem !== b.isSystem) return a.isSystem ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
+      // Sort alphabetically
+      allTags.sort((a, b) => a.name.localeCompare(b.name));
       setTags(allTags);
     } catch (error) {
       console.error('Failed to load tags:', error);
@@ -38,7 +34,7 @@ export function TagManager() {
   const handleCreateTag = async () => {
     if (!newTagName.trim()) return;
 
-    // Check for duplicates
+    // Check for duplicates (case-insensitive)
     const exists = tags.some(
       (t) => t.name.toLowerCase() === newTagName.trim().toLowerCase()
     );
@@ -57,17 +53,8 @@ export function TagManager() {
     }
   };
 
-  const handleToggleHidden = async (tag: Tag) => {
-    try {
-      await tagRepository.toggleHidden(tag.id);
-      await loadTags();
-    } catch (error) {
-      console.error('Failed to toggle tag visibility:', error);
-    }
-  };
-
   const handleStartEdit = (tag: Tag) => {
-    setEditingTag(tag.id);
+    setEditingTag(tag.name);
     setEditName(tag.name);
     setEditColor(tag.color || '#6366f1');
   };
@@ -75,9 +62,11 @@ export function TagManager() {
   const handleSaveEdit = async () => {
     if (!editingTag || !editName.trim()) return;
 
-    // Check for duplicates (excluding current tag)
+    // Check for duplicates (excluding current tag, case-insensitive)
     const exists = tags.some(
-      (t) => t.id !== editingTag && t.name.toLowerCase() === editName.trim().toLowerCase()
+      (t) =>
+        t.name.toLowerCase() !== editingTag.toLowerCase() &&
+        t.name.toLowerCase() === editName.trim().toLowerCase()
     );
     if (exists) {
       alert('A tag with this name already exists');
@@ -103,22 +92,15 @@ export function TagManager() {
   };
 
   const handleDeleteTag = async (tag: Tag) => {
-    if (tag.isSystem) return;
-
     if (window.confirm(`Delete "${tag.name}"? This will remove it from all recipes.`)) {
       try {
-        await tagRepository.delete(tag.id);
+        await tagRepository.delete(tag.name);
         await loadTags();
       } catch (error) {
         console.error('Failed to delete tag:', error);
       }
     }
   };
-
-  const systemTags = tags.filter((t) => t.isSystem);
-  const customTags = tags.filter((t) => !t.isSystem).sort((a, b) => a.name.localeCompare(b.name));
-  const visibleSystemTags = (showHidden ? systemTags : systemTags.filter((t) => !t.isHidden)).sort((a, b) => a.name.localeCompare(b.name));
-  const hiddenCount = systemTags.filter((t) => t.isHidden).length;
 
   if (isLoading) {
     return <div className={styles.loading}>Loading tags...</div>;
@@ -128,8 +110,8 @@ export function TagManager() {
     <div className={styles.container}>
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>Custom Tags</h3>
-          <span className={styles.count}>{customTags.length} tags</span>
+          <h3 className={styles.sectionTitle}>Tags</h3>
+          <span className={styles.count}>{tags.length} tags</span>
         </div>
 
         <div className={styles.createForm}>
@@ -152,13 +134,13 @@ export function TagManager() {
           </Button>
         </div>
 
-        {customTags.length === 0 ? (
-          <p className={styles.emptyText}>No custom tags yet. Create one above.</p>
+        {tags.length === 0 ? (
+          <p className={styles.emptyText}>No tags yet. Create one above.</p>
         ) : (
           <div className={styles.tagList}>
-            {customTags.map((tag) => (
-              <div key={tag.id} className={styles.tagRow}>
-                {editingTag === tag.id ? (
+            {tags.map((tag) => (
+              <div key={tag.name} className={styles.tagRow}>
+                {editingTag === tag.name ? (
                   <div className={styles.editRow}>
                     <Input
                       value={editName}
@@ -215,56 +197,6 @@ export function TagManager() {
             ))}
           </div>
         )}
-      </div>
-
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>System Tags</h3>
-          <span className={styles.count}>
-            {systemTags.length} tags
-            {hiddenCount > 0 && ` (${hiddenCount} hidden)`}
-          </span>
-        </div>
-
-        {hiddenCount > 0 && (
-          <label className={styles.showHiddenLabel}>
-            <input
-              type="checkbox"
-              checked={showHidden}
-              onChange={(e) => setShowHidden(e.target.checked)}
-            />
-            Show hidden tags
-          </label>
-        )}
-
-        <p className={styles.helpText}>
-          System tags cannot be deleted, but you can hide them from appearing in tag selections.
-        </p>
-
-        <div className={styles.tagList}>
-          {visibleSystemTags.map((tag) => (
-            <div
-              key={tag.id}
-              className={`${styles.tagRow} ${tag.isHidden ? styles.hidden : ''}`}
-            >
-              <div className={styles.tagInfo}>
-                <span className={styles.tagName}>{tag.name}</span>
-                {tag.isHidden && <span className={styles.hiddenBadge}>Hidden</span>}
-              </div>
-              <div className={styles.tagActions}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleToggleHidden(tag)}
-                  aria-label={tag.isHidden ? 'Show tag' : 'Hide tag'}
-                  title={tag.isHidden ? 'Show tag' : 'Hide tag'}
-                >
-                  {tag.isHidden ? <Eye size={16} /> : <EyeOff size={16} />}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

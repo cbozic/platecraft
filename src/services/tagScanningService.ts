@@ -1,6 +1,6 @@
 import type { ParsedRecipe, ParsedIngredient } from '@/types/import';
 import type { NutritionInfo } from '@/types/recipe';
-import { SYSTEM_TAGS } from '@/types/tags';
+import { DEFAULT_TAGS } from '@/types/tags';
 
 /**
  * Tag detection rules for each system tag
@@ -324,9 +324,9 @@ export const tagScanningService = {
       }
 
       if (matched) {
-        // Verify this is actually a system tag
-        const isSystemTag = SYSTEM_TAGS.some(st => st.name === rule.tagName);
-        if (isSystemTag) {
+        // Verify this is actually a default tag
+        const isDefaultTag = DEFAULT_TAGS.some(st => st.name === rule.tagName);
+        if (isDefaultTag) {
           detectedTags.push(rule.tagName);
         }
       }
@@ -336,16 +336,16 @@ export const tagScanningService = {
   },
 
   /**
-   * Get all available system tag names
+   * Get all available default tag names
    */
-  getSystemTagNames(): string[] {
-    return SYSTEM_TAGS.map(tag => tag.name);
+  getDefaultTagNames(): string[] {
+    return DEFAULT_TAGS.map(tag => tag.name);
   },
 
   /**
-   * Check if a tag name is a system tag
+   * Check if a tag name is a default tag
    */
-  isSystemTag(tagName: string): boolean {
-    return SYSTEM_TAGS.some(tag => tag.name === tagName);
+  isDefaultTag(tagName: string): boolean {
+    return DEFAULT_TAGS.some(tag => tag.name === tagName);
   },
 };

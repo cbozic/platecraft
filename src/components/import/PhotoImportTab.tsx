@@ -121,17 +121,20 @@ export function PhotoImportTab() {
   // Load available tags and restore selected tags from localStorage
   useEffect(() => {
     const loadTags = async () => {
-      const tags = await tagRepository.getVisibleTags();
+      const tags = await tagRepository.getAll();
       setAvailableTags(tags);
 
       // Restore selected tags from localStorage
       try {
         const stored = localStorage.getItem(PHOTO_IMPORT_TAGS_KEY);
         if (stored) {
-          const storedIds = JSON.parse(stored) as string[];
-          // Filter to only include valid tag IDs that still exist
-          const validIds = storedIds.filter(id => tags.some(t => t.id === id));
-          setSelectedTagIds(validIds);
+          const storedNames = JSON.parse(stored) as string[];
+          // Filter to only include valid tag names that still exist (case-insensitive)
+          const tagNamesLower = tags.map((t) => t.name.toLowerCase());
+          const validNames = storedNames.filter((name) =>
+            tagNamesLower.includes(name.toLowerCase())
+          );
+          setSelectedTagIds(validNames);
         }
       } catch (e) {
         console.warn('Failed to restore selected tags:', e);
@@ -775,16 +778,21 @@ export function PhotoImportTab() {
               Selected tags persist between imports for batch importing from the same source.
             </p>
             <div className={styles.tagList}>
-              {[...availableTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  className={`${styles.tagButton} ${selectedTagIds.includes(tag.id) ? styles.tagSelected : ''}`}
-                  onClick={() => handleTagToggle(tag.id)}
-                >
-                  {tag.name}
-                </button>
-              ))}
+              {[...availableTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
+                const isSelected = selectedTagIds.some(
+                  (name) => name.toLowerCase() === tag.name.toLowerCase()
+                );
+                return (
+                  <button
+                    key={tag.name}
+                    type="button"
+                    className={`${styles.tagButton} ${isSelected ? styles.tagSelected : ''}`}
+                    onClick={() => handleTagToggle(tag.name)}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

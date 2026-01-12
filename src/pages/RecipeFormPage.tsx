@@ -65,7 +65,7 @@ export function RecipeFormPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const tags = await tagRepository.getVisibleTags();
+        const tags = await tagRepository.getAll();
         setAvailableTags(tags.sort((a, b) => a.name.localeCompare(b.name)));
 
         if (id) {
@@ -157,11 +157,13 @@ export function RecipeFormPage() {
     setIngredients(updated);
   };
 
-  const handleToggleTag = (tagId: string) => {
-    if (selectedTags.includes(tagId)) {
-      setSelectedTags(selectedTags.filter((t) => t !== tagId));
+  const handleToggleTag = (tagName: string) => {
+    const tagNameLower = tagName.toLowerCase();
+    const isSelected = selectedTags.some((t) => t.toLowerCase() === tagNameLower);
+    if (isSelected) {
+      setSelectedTags(selectedTags.filter((t) => t.toLowerCase() !== tagNameLower));
     } else {
-      setSelectedTags([...selectedTags, tagId]);
+      setSelectedTags([...selectedTags, tagName]);
     }
   };
 
@@ -404,16 +406,21 @@ export function RecipeFormPage() {
             <div className={styles.formSection}>
               <h2 className={styles.sectionTitle}>Tags</h2>
               <div className={styles.tagList}>
-                {availableTags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className={`${styles.tagButton} ${selectedTags.includes(tag.id) ? styles.tagSelected : ''}`}
-                    onClick={() => handleToggleTag(tag.id)}
-                  >
-                    {tag.name}
-                  </button>
-                ))}
+                {availableTags.map((tag) => {
+                  const isSelected = selectedTags.some(
+                    (t) => t.toLowerCase() === tag.name.toLowerCase()
+                  );
+                  return (
+                    <button
+                      key={tag.name}
+                      type="button"
+                      className={`${styles.tagButton} ${isSelected ? styles.tagSelected : ''}`}
+                      onClick={() => handleToggleTag(tag.name)}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </CardBody>
