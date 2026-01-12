@@ -64,6 +64,8 @@ export interface UseMealPlanAssistantReturn {
   setDateRange: (startDate: Date, endDate: Date) => void;
   setServings: (servings: number) => void;
   setFavoritesWeight: (weight: number) => void;
+  setOverwriteMode: (overwriteMode: boolean) => void;
+  existingMealsInRange: PlannedMeal[];
 
   // Generation
   generatePlan: () => Promise<void>;
@@ -131,6 +133,7 @@ function getInitialConfig(defaultServings: number, mealSlots: MealSlot[]): MealP
     endDate: endOfWeek(today, { weekStartsOn: 0 }),
     defaultServings,
     favoritesWeight: 50, // Default to balanced (50% favorites preference)
+    overwriteMode: false, // Default to filling gaps only
   };
 }
 
@@ -181,6 +184,7 @@ function migrateOldConfig(oldConfig: MealPlanConfig, mealSlots: MealSlot[]): Mea
     endDate: oldConfig.endDate,
     defaultServings: oldConfig.defaultServings,
     favoritesWeight: oldConfig.favoritesWeight,
+    overwriteMode: oldConfig.overwriteMode ?? false,
   };
 }
 
@@ -199,6 +203,7 @@ export function useMealPlanAssistant({
   const [error, setError] = useState<string | null>(null);
   const [hasRestored, setHasRestored] = useState(false);
   const [swapModalMealId, setSwapModalMealId] = useState<string | null>(null);
+  const [existingMealsInRange, setExistingMealsInRange] = useState<PlannedMeal[]>([]);
 
   // Restore state from storage when requested
   useEffect(() => {
@@ -228,6 +233,23 @@ export function useMealPlanAssistant({
       setHasRestored(true);
     }
   }, [restoreFromStorage, hasRestored, mealSlots]);
+
+  // Fetch existing meals when date range changes (for fill-gaps vs overwrite logic)
+  useEffect(() => {
+    const fetchExistingMeals = async () => {
+      try {
+        const meals = await mealPlanRepository.getMealsForDateRange(
+          config.startDate,
+          config.endDate
+        );
+        setExistingMealsInRange(meals);
+      } catch (err) {
+        console.error('Failed to fetch existing meals:', err);
+        setExistingMealsInRange([]);
+      }
+    };
+    fetchExistingMeals();
+  }, [config.startDate, config.endDate]);
 
   // Note: tagNamesById is no longer needed since tags are identified by name directly
   // Kept as empty map for API compatibility with generateMealPlan
@@ -415,6 +437,10 @@ export function useMealPlanAssistant({
     setConfig((prev) => ({ ...prev, favoritesWeight: Math.max(0, Math.min(100, weight)) }));
   }, []);
 
+  const setOverwriteMode = useCallback((overwriteMode: boolean) => {
+    setConfig((prev) => ({ ...prev, overwriteMode }));
+  }, []);
+
   // Generation
   const generatePlan = useCallback(async () => {
     setIsGenerating(true);
@@ -427,7 +453,7 @@ export function useMealPlanAssistant({
       // Exclude locked recipe IDs to avoid duplicates (will still be used as fallback if needed)
       const lockedRecipeIds = new Set(lockedMeals.map((m) => m.recipeId));
 
-      const plan = await generateMealPlan(config, mealSlots, undefined, lockedRecipeIds);
+      const plan = await generateMealPlan(config, mealSlots, undefined, lockedRecipeIds, existingMealsInRange);
 
       // Merge locked meals back into the new plan
       if (lockedMeals.length > 0) {
@@ -453,7 +479,7 @@ export function useMealPlanAssistant({
     } finally {
       setIsGenerating(false);
     }
-  }, [config, mealSlots, generatedPlan]);
+  }, [config, mealSlots, generatedPlan, existingMealsInRange]);
 
   // Preview actions
   const swapMeal = useCallback(
@@ -560,6 +586,13 @@ export function useMealPlanAssistant({
     setError(null);
 
     try {
+      // In overwrite mode, delete existing meals in the date range first
+      if (config.overwriteMode && existingMealsInRange.length > 0) {
+        for (const meal of existingMealsInRange) {
+          await mealPlanRepository.removeMeal(meal.id);
+        }
+      }
+
       const mealsToAdd: PlannedMeal[] = generatedPlan.proposedMeals
         .filter((m) => !m.isRejected)
         .map((m) => ({
@@ -581,7 +614,7 @@ export function useMealPlanAssistant({
     } finally {
       setIsApplying(false);
     }
-  }, [generatedPlan, onComplete]);
+  }, [generatedPlan, onComplete, config.overwriteMode, existingMealsInRange]);
 
   // Save to storage (for navigation preservation)
   const saveToStorage = useCallback(() => {
@@ -635,6 +668,8 @@ export function useMealPlanAssistant({
     setDateRange,
     setServings,
     setFavoritesWeight,
+    setOverwriteMode,
+    existingMealsInRange,
     generatePlan,
     swapMeal,
     rejectMeal,

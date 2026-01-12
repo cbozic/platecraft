@@ -75,6 +75,7 @@ export interface MealPlanConfig {
   endDate: Date;
   defaultServings: number;
   favoritesWeight: number; // 0-100: percentage weight for preferring favorite recipes
+  overwriteMode: boolean; // false = fill gaps only, true = replace all existing meals
   // Deprecated fields - kept for migration
   dayTagRules?: DayTagRule[];
   skippedDays?: number[];

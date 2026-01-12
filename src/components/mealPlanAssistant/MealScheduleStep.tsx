@@ -10,7 +10,7 @@ import {
   differenceInDays,
   eachDayOfInterval,
 } from 'date-fns';
-import { CalendarDays, Utensils, Users, Heart, Shuffle, ChevronDown, ChevronUp, Settings, X } from 'lucide-react';
+import { CalendarDays, Utensils, Users, Heart, Shuffle, ChevronDown, ChevronUp, Settings, X, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Input, Button } from '@/components/ui';
 import { getDayNames } from '@/utils/calendar';
 import type { MealSlot, Tag } from '@/types';
@@ -26,6 +26,8 @@ interface MealScheduleStepProps {
   weekStartsOn?: 0 | 1;
   defaultServings: number;
   favoritesWeight: number;
+  overwriteMode: boolean;
+  existingMealCount: number;
   onDateRangeChange: (startDate: Date, endDate: Date) => void;
   onToggleMealSlot: (dayOfWeek: number, slotId: string, enabled: boolean) => void;
   onUpdateMealSlotTags: (dayOfWeek: number, slotId: string, tagConfig: MealSlotTagConfig | undefined) => void;
@@ -33,6 +35,7 @@ interface MealScheduleStepProps {
   onClearSchedule: () => void;
   onServingsChange: (servings: number) => void;
   onFavoritesWeightChange: (weight: number) => void;
+  onOverwriteModeChange: (overwriteMode: boolean) => void;
 }
 
 type QuickRange = 'this-week' | 'next-week' | 'next-7-days' | 'next-14-days' | 'current-month' | 'next-month' | 'custom';
@@ -63,6 +66,8 @@ export function MealScheduleStep({
   weekStartsOn = 0,
   defaultServings,
   favoritesWeight,
+  overwriteMode,
+  existingMealCount,
   onDateRangeChange,
   onToggleMealSlot,
   onUpdateMealSlotTags,
@@ -70,6 +75,7 @@ export function MealScheduleStep({
   onClearSchedule,
   onServingsChange,
   onFavoritesWeightChange,
+  onOverwriteModeChange,
 }: MealScheduleStepProps) {
   const [customStart, setCustomStart] = useState(format(startDate, 'yyyy-MM-dd'));
   const [customEnd, setCustomEnd] = useState(format(endDate, 'yyyy-MM-dd'));
@@ -610,6 +616,47 @@ export function MealScheduleStep({
                       : `${favoritesWeight}% favorites, ${100 - favoritesWeight}% random`}
               </div>
             </div>
+          </div>
+
+          {/* Existing Meals Handling */}
+          <div className={styles.settingItem}>
+            <div className={styles.settingLabel}>
+              <CalendarDays size={16} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+              Existing Meals
+            </div>
+            <div className={styles.modeSelector}>
+              <button
+                type="button"
+                className={`${styles.modeButton} ${!overwriteMode ? styles.selected : ''}`}
+                onClick={() => onOverwriteModeChange(false)}
+              >
+                <span className={styles.modeTitle}>Keep what I have</span>
+                <span className={styles.modeDescription}>Only fill empty slots</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.modeButton} ${overwriteMode ? styles.selected : ''}`}
+                onClick={() => onOverwriteModeChange(true)}
+              >
+                <span className={styles.modeTitle}>
+                  <RefreshCw size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  Start fresh
+                </span>
+                <span className={styles.modeDescription}>Replace all meals</span>
+              </button>
+            </div>
+            {overwriteMode && existingMealCount > 0 && (
+              <div className={styles.overwriteWarning}>
+                <AlertTriangle size={16} />
+                <div>
+                  <strong>{existingMealCount} meal{existingMealCount !== 1 ? 's' : ''} will be replaced</strong>
+                  <p>
+                    You already have meals planned for this date range. If you've already
+                    shopped for ingredients, consider using "Keep what I have" instead.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

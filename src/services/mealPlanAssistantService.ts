@@ -12,7 +12,7 @@ import type {
   SlotToFill,
   PlanCoverage,
 } from '@/types/mealPlanAssistant';
-import type { Recipe, Ingredient, MealSlot } from '@/types';
+import type { Recipe, Ingredient, MealSlot, PlannedMeal } from '@/types';
 import { UNIT_INFO } from '@/types/units';
 import type { MeasurementUnit } from '@/types/units';
 import { recipeRepository } from '@/db';
@@ -608,12 +608,15 @@ function findRecipeForReuse(
  * since recipe.tags and tagConfig.tags are both names now
  * @param excludeRecipeIds - Recipe IDs to avoid using (e.g., from locked meals). These will
  *                           only be used as a last resort if no other recipes are available.
+ * @param existingMeals - Existing planned meals in the date range. Used to filter out
+ *                        occupied slots when not in overwrite mode.
  */
 export async function generateMealPlan(
   config: MealPlanConfig,
   mealSlots: MealSlot[],
   _tagNamesById?: Map<string, string>,
-  excludeRecipeIds?: Set<string>
+  excludeRecipeIds?: Set<string>,
+  existingMeals?: PlannedMeal[]
 ): Promise<GeneratedMealPlan> {
   const warnings: string[] = [];
   const proposedMeals: ProposedMeal[] = [];
@@ -648,7 +651,20 @@ export async function generateMealPlan(
 
   // Generate slots to fill based on weekdayConfigs
   const allSlots = generateSlotList(config.startDate, config.endDate, config.weekdayConfigs, mealSlots);
-  const slotsToFill = [...allSlots];
+
+  // In fill-gaps mode (not overwrite), filter out slots that already have meals
+  let slotsToFill = [...allSlots];
+  let skippedExistingCount = 0;
+  if (!config.overwriteMode && existingMeals && existingMeals.length > 0) {
+    const occupiedSlotKeys = new Set(
+      existingMeals.map((meal) => `${meal.date}:${meal.slotId}`)
+    );
+    const originalCount = slotsToFill.length;
+    slotsToFill = allSlots.filter(
+      (slot) => !occupiedSlotKeys.has(`${slot.date}:${slot.slotId}`)
+    );
+    skippedExistingCount = originalCount - slotsToFill.length;
+  }
 
   // PHASE 1: Find recipes that use ingredients on hand
   if (config.ingredientsOnHand.length > 0) {
@@ -873,7 +889,10 @@ export async function generateMealPlan(
     }
   }
 
-  // Generate warnings - now only if we have no recipes at all
+  // Generate warnings and informational messages
+  if (skippedExistingCount > 0) {
+    warnings.push(`Kept ${skippedExistingCount} existing meal${skippedExistingCount !== 1 ? 's' : ''} in your calendar.`);
+  }
   if (slotsToFill.length > 0) {
     warnings.push(`Could not fill ${slotsToFill.length} slots. Please add more recipes to your collection.`);
   } else if (allSlots.length > allRecipes.length) {

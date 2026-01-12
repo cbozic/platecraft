@@ -134,6 +134,8 @@ export function MealPlanAssistantModal({
               weekStartsOn={weekStartsOn}
               defaultServings={assistant.config.defaultServings}
               favoritesWeight={assistant.config.favoritesWeight}
+              overwriteMode={assistant.config.overwriteMode}
+              existingMealCount={assistant.existingMealsInRange.length}
               onDateRangeChange={assistant.setDateRange}
               onToggleMealSlot={assistant.toggleMealSlot}
               onUpdateMealSlotTags={assistant.updateMealSlotTags}
@@ -141,6 +143,7 @@ export function MealPlanAssistantModal({
               onClearSchedule={assistant.clearMealSchedule}
               onServingsChange={assistant.setServings}
               onFavoritesWeightChange={assistant.setFavoritesWeight}
+              onOverwriteModeChange={assistant.setOverwriteMode}
             />
           )}
 
