@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { startOfWeek, endOfWeek } from 'date-fns';
+import { startOfWeek, endOfWeek, parseISO } from 'date-fns';
 
 const STORAGE_KEY = 'platecraft-meal-plan-assistant-state';
 import type {
@@ -28,6 +28,7 @@ interface StoredState {
   currentStep: AssistantStep;
   config: MealPlanConfig & { startDate: string; endDate: string };
   generatedPlan: GeneratedMealPlan | null;
+  swapModalMealId: string | null;
 }
 
 export interface UseMealPlanAssistantReturn {
@@ -38,6 +39,8 @@ export interface UseMealPlanAssistantReturn {
   isGenerating: boolean;
   isApplying: boolean;
   error: string | null;
+  swapModalMealId: string | null;
+  setSwapModalMealId: (mealId: string | null) => void;
 
   // Step navigation
   setStep: (step: AssistantStep) => void;
@@ -69,6 +72,7 @@ export interface UseMealPlanAssistantReturn {
   swapMeal: (mealId: string, newRecipeId: string, newRecipeTitle: string) => void;
   rejectMeal: (mealId: string) => void;
   lockMeal: (mealId: string) => void;
+  unlockMeal: (mealId: string) => void;
   getAlternativeRecipes: (mealId: string) => Promise<{ id: string; title: string }[]>;
 
   // Apply
@@ -194,6 +198,7 @@ export function useMealPlanAssistant({
   const [isApplying, setIsApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasRestored, setHasRestored] = useState(false);
+  const [swapModalMealId, setSwapModalMealId] = useState<string | null>(null);
 
   // Restore state from storage when requested
   useEffect(() => {
@@ -214,6 +219,10 @@ export function useMealPlanAssistant({
         // Migrate old config format if needed
         setConfig(migrateOldConfig(restoredConfig, mealSlots));
         setGeneratedPlan(stored.generatedPlan);
+        // Restore swap modal state if it was open
+        if (stored.swapModalMealId) {
+          setSwapModalMealId(stored.swapModalMealId);
+        }
         clearStoredState();
       }
       setHasRestored(true);
@@ -412,7 +421,27 @@ export function useMealPlanAssistant({
     setError(null);
 
     try {
-      const plan = await generateMealPlan(config, mealSlots);
+      // Preserve locked meals from the current plan
+      const lockedMeals = generatedPlan?.proposedMeals.filter((m) => m.isLocked) ?? [];
+      const lockedSlotKeys = new Set(lockedMeals.map((m) => `${m.date}:${m.slotId}`));
+      // Exclude locked recipe IDs to avoid duplicates (will still be used as fallback if needed)
+      const lockedRecipeIds = new Set(lockedMeals.map((m) => m.recipeId));
+
+      const plan = await generateMealPlan(config, mealSlots, undefined, lockedRecipeIds);
+
+      // Merge locked meals back into the new plan
+      if (lockedMeals.length > 0) {
+        // Filter out newly generated meals that would replace locked ones
+        const newMeals = plan.proposedMeals.filter(
+          (m) => !lockedSlotKeys.has(`${m.date}:${m.slotId}`)
+        );
+        // Combine locked meals with the new meals
+        plan.proposedMeals = [...lockedMeals, ...newMeals].sort((a, b) => {
+          const dateCompare = a.date.localeCompare(b.date);
+          return dateCompare !== 0 ? dateCompare : a.slotName.localeCompare(b.slotName);
+        });
+      }
+
       setGeneratedPlan(plan);
 
       if (plan.warnings.length > 0) {
@@ -424,7 +453,7 @@ export function useMealPlanAssistant({
     } finally {
       setIsGenerating(false);
     }
-  }, [config, mealSlots]);
+  }, [config, mealSlots, generatedPlan]);
 
   // Preview actions
   const swapMeal = useCallback(
@@ -481,6 +510,18 @@ export function useMealPlanAssistant({
     });
   }, []);
 
+  const unlockMeal = useCallback((mealId: string) => {
+    setGeneratedPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        proposedMeals: prev.proposedMeals.map((meal) =>
+          meal.id === mealId ? { ...meal, isLocked: false } : meal
+        ),
+      };
+    });
+  }, []);
+
   const getAlternativeRecipes = useCallback(
     async (mealId: string) => {
       if (!generatedPlan) return [];
@@ -488,7 +529,12 @@ export function useMealPlanAssistant({
       const meal = generatedPlan.proposedMeals.find((m) => m.id === mealId);
       if (!meal) return [];
 
-      const dayOfWeek = new Date(meal.date).getDay();
+      // Use parseISO to avoid timezone issues with YYYY-MM-DD strings
+      const dayOfWeek = parseISO(meal.date).getDay();
+
+      // Exclude recipes already used in the plan (except rejected ones and current meal)
+      // This avoids duplicates. When a recipe is swapped out, it automatically becomes
+      // available again since it's no longer in any meal.
       const usedRecipeIds = generatedPlan.proposedMeals
         .filter((m) => !m.isRejected && m.id !== mealId)
         .map((m) => m.recipeId);
@@ -548,12 +594,13 @@ export function useMealPlanAssistant({
           endDate: config.endDate.toISOString(),
         } as StoredState['config'],
         generatedPlan,
+        swapModalMealId,
       };
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
       console.error('Failed to save meal plan state:', e);
     }
-  }, [currentStep, config, generatedPlan]);
+  }, [currentStep, config, generatedPlan, swapModalMealId]);
 
   // Reset
   const reset = useCallback(() => {
@@ -571,6 +618,8 @@ export function useMealPlanAssistant({
     isGenerating,
     isApplying,
     error,
+    swapModalMealId,
+    setSwapModalMealId,
     setStep: setCurrentStep,
     canGoNext,
     canGoBack,
@@ -590,6 +639,7 @@ export function useMealPlanAssistant({
     swapMeal,
     rejectMeal,
     lockMeal,
+    unlockMeal,
     getAlternativeRecipes,
     applyPlan,
     reset,

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Search, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, Search, ArrowRight, Eye } from 'lucide-react';
 import { Modal, ModalFooter, Button, Input } from '@/components/ui';
 import styles from './RecipeSwapModal.module.css';
 
@@ -10,6 +11,7 @@ interface RecipeSwapModalProps {
   mealId: string;
   onSwap: (recipeId: string, recipeTitle: string) => void;
   getAlternatives: (mealId: string) => Promise<{ id: string; title: string }[]>;
+  onSaveState?: () => void;
 }
 
 export function RecipeSwapModal({
@@ -19,7 +21,9 @@ export function RecipeSwapModal({
   mealId,
   onSwap,
   getAlternatives,
+  onSaveState,
 }: RecipeSwapModalProps) {
+  const navigate = useNavigate();
   const [alternatives, setAlternatives] = useState<{ id: string; title: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,6 +47,14 @@ export function RecipeSwapModal({
         });
     }
   }, [isOpen, mealId, getAlternatives]);
+
+  const handleViewRecipe = (recipeId: string) => {
+    // Save state before navigating so we can restore on return
+    onSaveState?.();
+    navigate(`/recipes/${recipeId}`, {
+      state: { from: 'mealPlanAssistant' },
+    });
+  };
 
   const filteredAlternatives = alternatives.filter((alt) =>
     alt.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -86,17 +98,29 @@ export function RecipeSwapModal({
             </div>
           ) : (
             filteredAlternatives.map((alt) => (
-              <button
+              <div
                 key={alt.id}
-                type="button"
                 className={`${styles.alternativeItem} ${selectedRecipe?.id === alt.id ? styles.selected : ''}`}
-                onClick={() => setSelectedRecipe(alt)}
               >
-                <span className={styles.altTitle}>{alt.title}</span>
-                {selectedRecipe?.id === alt.id && (
-                  <ArrowRight size={16} className={styles.selectedIcon} />
-                )}
-              </button>
+                <button
+                  type="button"
+                  className={styles.altTitleButton}
+                  onClick={() => setSelectedRecipe(alt)}
+                >
+                  <span className={styles.altTitle}>{alt.title}</span>
+                  {selectedRecipe?.id === alt.id && (
+                    <ArrowRight size={16} className={styles.selectedIcon} />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className={styles.viewButton}
+                  onClick={() => handleViewRecipe(alt.id)}
+                  title="View recipe details"
+                >
+                  <Eye size={16} />
+                </button>
+              </div>
             ))
           )}
         </div>

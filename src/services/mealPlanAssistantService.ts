@@ -606,15 +606,19 @@ function findRecipeForReuse(
  * Main meal plan generation function
  * Note: tagNamesById parameter is kept for API compatibility but no longer needed
  * since recipe.tags and tagConfig.tags are both names now
+ * @param excludeRecipeIds - Recipe IDs to avoid using (e.g., from locked meals). These will
+ *                           only be used as a last resort if no other recipes are available.
  */
 export async function generateMealPlan(
   config: MealPlanConfig,
   mealSlots: MealSlot[],
-  _tagNamesById?: Map<string, string>
+  _tagNamesById?: Map<string, string>,
+  excludeRecipeIds?: Set<string>
 ): Promise<GeneratedMealPlan> {
   const warnings: string[] = [];
   const proposedMeals: ProposedMeal[] = [];
-  const usedRecipes = new Set<string>();
+  // Pre-populate with excluded recipes to avoid duplicates with locked meals
+  const usedRecipes = new Set<string>(excludeRecipeIds);
 
   // Clone ingredient pool for tracking
   const ingredientPool: IngredientOnHand[] = config.ingredientsOnHand.map((i) => ({
@@ -920,6 +924,7 @@ export async function generateMealPlan(
 /**
  * Find alternative recipes for swapping
  * tagConfig.tags and recipe.tags are both names
+ * Returns recipes prioritized by tag matches, with non-matching recipes shuffled for variety
  */
 export async function findAlternativeRecipes(
   currentRecipeId: string,
@@ -927,16 +932,17 @@ export async function findAlternativeRecipes(
   slotId: string,
   weekdayConfigs: WeekdayConfig[],
   usedRecipeIds: string[],
-  limit: number = 10
+  limit: number = 15
 ): Promise<Recipe[]> {
   const allRecipes = await recipeRepository.getAll();
   const usedSet = new Set(usedRecipeIds);
 
-  // Filter out used recipes and current recipe
-  let candidates = allRecipes.filter((r) => r.id !== currentRecipeId && !usedSet.has(r.id));
+  // Filter out used recipes and current recipe to avoid duplicates
+  const candidates = allRecipes.filter((r) => r.id !== currentRecipeId && !usedSet.has(r.id));
 
-  // Prioritize recipes matching slot's tag config, sorted by number of matches
+  // Get tag config for this specific day and slot
   const tagConfig = getSlotTagConfig(weekdayConfigs, dayOfWeek, slotId);
+
   if (tagConfig && tagConfig.tags.length > 0) {
     // Build set of config tag names (lowercase for case-insensitive)
     const configTagNamesLower = new Set(
@@ -949,10 +955,25 @@ export async function findAlternativeRecipes(
       tagMatchCount: countMatchingTagNames(r, configTagNamesLower),
     }));
 
-    // Sort by tag match count descending (more matches first), then non-matching
-    scored.sort((a, b) => b.tagMatchCount - a.tagMatchCount);
-    candidates = scored.map((s) => s.recipe);
+    // Separate tag-matching recipes from non-matching
+    const tagMatching = scored.filter((s) => s.tagMatchCount > 0);
+    const nonMatching = scored.filter((s) => s.tagMatchCount === 0);
+
+    // Sort tag-matching by match count descending
+    tagMatching.sort((a, b) => b.tagMatchCount - a.tagMatchCount);
+
+    // Shuffle non-matching for variety
+    const shuffledNonMatching = shuffleArray(nonMatching);
+
+    // Combine: tag-matching first, then shuffled non-matching
+    const result = [
+      ...tagMatching.map((s) => s.recipe),
+      ...shuffledNonMatching.map((s) => s.recipe),
+    ];
+
+    return result.slice(0, limit);
   }
 
-  return candidates.slice(0, limit);
+  // No tag config - return shuffled candidates for variety
+  return shuffleArray(candidates).slice(0, limit);
 }

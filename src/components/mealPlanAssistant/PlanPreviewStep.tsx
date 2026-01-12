@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import {
   CheckCircle,
   RefreshCw,
   Lock,
+  Unlock,
   X,
   ShoppingBasket,
   AlertTriangle,
@@ -21,9 +22,12 @@ interface PlanPreviewStepProps {
   onSwap: (mealId: string, newRecipeId: string, newRecipeTitle: string) => void;
   onReject: (mealId: string) => void;
   onLock: (mealId: string) => void;
+  onUnlock: (mealId: string) => void;
   onRegenerate: () => void;
   getAlternatives: (mealId: string) => Promise<{ id: string; title: string }[]>;
   onSaveState?: () => void;
+  swapModalMealId: string | null;
+  setSwapModalMealId: (mealId: string | null) => void;
 }
 
 const MATCH_TYPE_COLORS = {
@@ -43,12 +47,14 @@ export function PlanPreviewStep({
   onSwap,
   onReject,
   onLock,
+  onUnlock,
   onRegenerate,
   getAlternatives,
   onSaveState,
+  swapModalMealId,
+  setSwapModalMealId,
 }: PlanPreviewStepProps) {
   const navigate = useNavigate();
-  const [swapModalMealId, setSwapModalMealId] = useState<string | null>(null);
 
   // Group meals by date
   const mealsByDate = useMemo(() => {
@@ -198,10 +204,15 @@ export function PlanPreviewStep({
                   </div>
                   <div className={styles.mealActions}>
                     {meal.isLocked ? (
-                      <div className={styles.lockedBadge}>
-                        <Lock size={14} />
-                        Locked
-                      </div>
+                      <button
+                        type="button"
+                        className={styles.lockedBadge}
+                        onClick={() => onUnlock(meal.id)}
+                        title="Click to unlock"
+                      >
+                        <Unlock size={14} />
+                        Unlock
+                      </button>
                     ) : meal.isRejected ? (
                       <div className={styles.rejectedBadge}>
                         <X size={14} />
@@ -266,6 +277,7 @@ export function PlanPreviewStep({
             setSwapModalMealId(null);
           }}
           getAlternatives={getAlternatives}
+          onSaveState={onSaveState}
         />
       )}
     </div>

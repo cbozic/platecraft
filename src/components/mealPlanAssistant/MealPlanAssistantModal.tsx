@@ -157,9 +157,12 @@ export function MealPlanAssistantModal({
                   onSwap={assistant.swapMeal}
                   onReject={assistant.rejectMeal}
                   onLock={assistant.lockMeal}
+                  onUnlock={assistant.unlockMeal}
                   onRegenerate={assistant.generatePlan}
                   getAlternatives={assistant.getAlternativeRecipes}
                   onSaveState={assistant.saveToStorage}
+                  swapModalMealId={assistant.swapModalMealId}
+                  setSwapModalMealId={assistant.setSwapModalMealId}
                 />
               ) : null}
             </>
