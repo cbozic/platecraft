@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ZoomIn, Trash2, Image as ImageIcon } from 'lucide-react';
+import { X, ZoomIn, Trash2, Image as ImageIcon, Star } from 'lucide-react';
 import { imageService } from '@/services';
 import type { RecipeImage } from '@/types';
 import styles from './ImageGallery.module.css';
@@ -7,10 +7,11 @@ import styles from './ImageGallery.module.css';
 interface ImageGalleryProps {
   images: RecipeImage[];
   onDelete?: (imageId: string) => void;
+  onSetPrimary?: (imageId: string) => void;
   editable?: boolean;
 }
 
-export function ImageGallery({ images, onDelete, editable = false }: ImageGalleryProps) {
+export function ImageGallery({ images, onDelete, onSetPrimary, editable = false }: ImageGalleryProps) {
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
   const [selectedImage, setSelectedImage] = useState<RecipeImage | null>(null);
 
@@ -59,6 +60,14 @@ export function ImageGallery({ images, onDelete, editable = false }: ImageGaller
     [onDelete]
   );
 
+  const handleSetPrimary = useCallback(
+    (e: React.MouseEvent, imageId: string) => {
+      e.stopPropagation();
+      onSetPrimary?.(imageId);
+    },
+    [onSetPrimary]
+  );
+
   if (images.length === 0) {
     return null;
   }
@@ -81,6 +90,21 @@ export function ImageGallery({ images, onDelete, editable = false }: ImageGaller
                 <ZoomIn size={20} className={styles.zoomIcon} />
               </div>
               {image.caption && <span className={styles.caption}>{image.caption}</span>}
+              {image.isPrimary && (
+                <div className={styles.primaryBadge} aria-label="Primary image">
+                  <Star size={14} fill="currentColor" />
+                </div>
+              )}
+              {editable && onSetPrimary && !image.isPrimary && (
+                <button
+                  type="button"
+                  className={styles.setPrimaryButton}
+                  onClick={(e) => handleSetPrimary(e, image.id)}
+                  aria-label="Set as primary image"
+                >
+                  <Star size={14} />
+                </button>
+              )}
               {editable && onDelete && (
                 <button
                   type="button"

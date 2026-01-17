@@ -84,6 +84,47 @@
   background-color: var(--color-error);
 }
 
+.primaryBadge {
+  position: absolute;
+  top: var(--spacing-xs);
+  left: var(--spacing-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.setPrimaryButton {
+  position: absolute;
+  top: var(--spacing-xs);
+  left: var(--spacing-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.imageContainer:hover .setPrimaryButton {
+  opacity: 1;
+}
+
+.setPrimaryButton:hover {
+  background-color: var(--color-primary);
+}
+
 /* Modal */
 .modal {
   position: fixed;

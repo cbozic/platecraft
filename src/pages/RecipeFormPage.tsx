@@ -85,7 +85,12 @@ export function RecipeFormPage() {
             setReferencePageNumber(recipe.referencePageNumber || '');
             setReferenceOther(recipe.referenceOther || '');
             setSelectedTags(recipe.tags);
-            setImages(recipe.images || []);
+            // Normalize images: ensure one is primary if images exist
+            const recipeImages = recipe.images || [];
+            if (recipeImages.length > 0 && !recipeImages.some((img) => img.isPrimary)) {
+              recipeImages[0] = { ...recipeImages[0], isPrimary: true };
+            }
+            setImages(recipeImages);
             if (recipe.nutrition) {
               setHasNutrition(true);
               setNutrition(recipe.nutrition);
@@ -120,6 +125,10 @@ export function RecipeFormPage() {
               // Restore images from base64 to Blobs
               if (imported.images && imported.images.length > 0) {
                 const restoredImages = imageService.restoreImagesFromImport(imported.images);
+                // Normalize: ensure one is primary if images exist
+                if (restoredImages.length > 0 && !restoredImages.some((img) => img.isPrimary)) {
+                  restoredImages[0] = { ...restoredImages[0], isPrimary: true };
+                }
                 setImages(restoredImages);
               }
               // Clear the imported data from sessionStorage
@@ -168,11 +177,36 @@ export function RecipeFormPage() {
   };
 
   const handleAddImage = useCallback((image: RecipeImage) => {
-    setImages((prev) => [...prev, image]);
+    setImages((prev) => {
+      // Auto-set first image as primary
+      if (prev.length === 0) {
+        return [{ ...image, isPrimary: true }];
+      }
+      return [...prev, { ...image, isPrimary: false }];
+    });
   }, []);
 
   const handleDeleteImage = useCallback((imageId: string) => {
-    setImages((prev) => prev.filter((img) => img.id !== imageId));
+    setImages((prev) => {
+      const deletedImage = prev.find((img) => img.id === imageId);
+      const remaining = prev.filter((img) => img.id !== imageId);
+      // If deleted image was primary and other images remain, auto-promote first
+      if (deletedImage?.isPrimary && remaining.length > 0) {
+        return remaining.map((img, index) =>
+          index === 0 ? { ...img, isPrimary: true } : img
+        );
+      }
+      return remaining;
+    });
+  }, []);
+
+  const handleSetPrimary = useCallback((imageId: string) => {
+    setImages((prev) =>
+      prev.map((img) => ({
+        ...img,
+        isPrimary: img.id === imageId,
+      }))
+    );
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -435,6 +469,7 @@ export function RecipeFormPage() {
                   images={images}
                   editable
                   onDelete={handleDeleteImage}
+                  onSetPrimary={handleSetPrimary}
                 />
               )}
               <ImageUploader onImageAdd={handleAddImage} />
