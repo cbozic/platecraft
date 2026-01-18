@@ -125,3 +125,15 @@ export interface ShoppingListGenerationResult {
   usedAI: boolean;
   cancelled?: boolean;
 }
+
+// A refined group of ingredients for manual splitting/regrouping
+export interface RefinedIngredientGroup {
+  id: string;
+  ingredientNames: string[];
+  canonicalName: string;
+  affectedRecipes: Array<{
+    recipeId: string;
+    recipeName: string;
+    ingredientName: string;
+  }>;
+}

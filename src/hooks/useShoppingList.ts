@@ -6,6 +6,7 @@ import type {
   StoreSectionInfo,
   ShoppingListGenerationResult,
   PendingIngredientMatch,
+  RefinedIngredientGroup,
 } from '@/types';
 import { DEFAULT_STORE_SECTIONS } from '@/types/shopping';
 import { ingredientDeduplicationService } from '@/services/ingredientDeduplicationService';
@@ -168,6 +169,19 @@ export function useShoppingList(options: UseShoppingListOptions = {}) {
         await ingredientDeduplicationService.confirmAllMatches(matches);
       } catch (error) {
         console.error('Failed to confirm all ingredient matches:', error);
+        throw error;
+      }
+    },
+    []
+  );
+
+  // Confirm refined ingredient groups (for manual splitting/regrouping)
+  const confirmRefinedIngredientGroups = useCallback(
+    async (groups: RefinedIngredientGroup[]) => {
+      try {
+        await ingredientDeduplicationService.confirmRefinedGroups(groups);
+      } catch (error) {
+        console.error('Failed to confirm refined ingredient groups:', error);
         throw error;
       }
     },
@@ -342,6 +356,142 @@ export function useShoppingList(options: UseShoppingListOptions = {}) {
     }
   }, [currentList]);
 
+  // Group multiple items into one
+  const groupItems = useCallback(
+    async (
+      itemIds: string[],
+      canonicalName: string,
+      targetSection: string,
+      saveMapping: boolean = true
+    ) => {
+      if (!currentList) return;
+
+      try {
+        // Get items to be grouped for mapping
+        const itemsToGroup = currentList.items.filter((item) =>
+          itemIds.includes(item.id)
+        );
+
+        // Call repository method
+        const newItem = await shoppingRepository.groupItemsInList(
+          currentList.id,
+          itemIds,
+          canonicalName,
+          targetSection
+        );
+
+        // Update local state
+        setCurrentList((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: [...prev.items.filter((item) => !itemIds.includes(item.id)), newItem],
+          };
+        });
+
+        // Optionally save mapping for future lists
+        if (saveMapping && itemsToGroup.length >= 2) {
+          const ingredientNames = itemsToGroup.map((item) => item.name);
+          const uniqueNames = [...new Set(ingredientNames.map((n) => n.toLowerCase()))];
+
+          // Only save mapping if there are different names
+          if (uniqueNames.length >= 2) {
+            const group: RefinedIngredientGroup = {
+              id: newItem.id,
+              ingredientNames,
+              canonicalName,
+              affectedRecipes: itemsToGroup.flatMap((item) =>
+                (item.sourceRecipeDetails || []).map((s) => ({
+                  recipeId: s.recipeId,
+                  recipeName: s.recipeName,
+                  ingredientName: s.originalIngredientName,
+                }))
+              ),
+            };
+            await confirmRefinedIngredientGroups([group]);
+          }
+        }
+
+        return newItem;
+      } catch (error) {
+        console.error('Failed to group items:', error);
+        throw error;
+      }
+    },
+    [currentList, confirmRefinedIngredientGroups]
+  );
+
+  // Ungroup item back into separate items
+  const ungroupItem = useCallback(
+    async (itemId: string) => {
+      if (!currentList) return;
+
+      try {
+        const newItems = await shoppingRepository.ungroupItemInList(
+          currentList.id,
+          itemId
+        );
+
+        // Update local state
+        setCurrentList((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: [...prev.items.filter((item) => item.id !== itemId), ...newItems],
+          };
+        });
+
+        return newItems;
+      } catch (error) {
+        console.error('Failed to ungroup item:', error);
+        throw error;
+      }
+    },
+    [currentList]
+  );
+
+  // Partially ungroup item - remove selected sources, keep rest grouped
+  const partialUngroupItem = useCallback(
+    async (itemId: string, sourceIndicesToRemove: number[]) => {
+      if (!currentList) return;
+
+      try {
+        const result = await shoppingRepository.partialUngroupItemInList(
+          currentList.id,
+          itemId,
+          sourceIndicesToRemove
+        );
+
+        // Update local state
+        setCurrentList((prev) => {
+          if (!prev) return prev;
+
+          // Remove original item
+          let updatedItems = prev.items.filter((item) => item.id !== itemId);
+
+          // Add back the updated group item if it still exists
+          if (result.updatedGroupItem) {
+            updatedItems.push(result.updatedGroupItem);
+          }
+
+          // Add new separate items
+          updatedItems.push(...result.removedItems);
+
+          return {
+            ...prev,
+            items: updatedItems,
+          };
+        });
+
+        return result;
+      } catch (error) {
+        console.error('Failed to partially ungroup item:', error);
+        throw error;
+      }
+    },
+    [currentList]
+  );
+
   return {
     // State
     lists,
@@ -368,10 +518,16 @@ export function useShoppingList(options: UseShoppingListOptions = {}) {
     uncheckAll,
     clearChecked,
 
+    // Grouping operations
+    groupItems,
+    ungroupItem,
+    partialUngroupItem,
+
     // Ingredient matching operations
     confirmIngredientMatch,
     rejectIngredientMatch,
     confirmAllIngredientMatches,
+    confirmRefinedIngredientGroups,
 
     // Refresh
     refresh: loadLists,

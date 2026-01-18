@@ -1,0 +1,64 @@
+.bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-md);
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 800px;
+  margin: 0 auto;
+  gap: var(--spacing-md);
+}
+
+.count {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+@media (max-width: 640px) {
+  .content {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .actions button {
+    flex: 1;
+  }
+}
+
+/* Print styles - hide selection bar */
+@media print {
+  .bar {
+    display: none;
+  }
+}

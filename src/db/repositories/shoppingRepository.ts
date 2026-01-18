@@ -592,6 +592,304 @@ export const shoppingRepository = {
     return newList;
   },
 
+  // Group multiple items into one
+  async groupItemsInList(
+    listId: string,
+    itemIds: string[],
+    canonicalName: string,
+    targetSection: string
+  ): Promise<ShoppingItem> {
+    const list = await this.getListById(listId);
+    if (!list) throw new Error('Shopping list not found');
+
+    // Get items to be grouped
+    const itemsToGroup = list.items.filter((item) => itemIds.includes(item.id));
+    if (itemsToGroup.length < 2) {
+      throw new Error('Need at least 2 items to group');
+    }
+
+    // Merge sourceRecipeDetails from all items
+    const mergedSourceRecipeDetails: SourceRecipeDetail[] = [];
+    const mergedOriginalAmounts: OriginalAmount[] = [];
+
+    for (const item of itemsToGroup) {
+      if (item.sourceRecipeDetails && item.sourceRecipeDetails.length > 0) {
+        mergedSourceRecipeDetails.push(...item.sourceRecipeDetails);
+      } else if (item.isManual) {
+        // For manual items without recipe sources, create a pseudo-source
+        mergedSourceRecipeDetails.push({
+          recipeId: '',
+          recipeName: 'Manual',
+          quantity: item.quantity,
+          unit: item.unit,
+          originalIngredientName: item.name,
+        });
+      }
+      if (item.originalAmounts) {
+        mergedOriginalAmounts.push(...item.originalAmounts);
+      }
+    }
+
+    // Aggregate quantities using unit conversion
+    const amounts = itemsToGroup.map((item) => ({
+      quantity: item.quantity,
+      unit: item.unit,
+      recipeId: '',
+      recipeName: '',
+    }));
+    const aggregated = aggregateAmounts(amounts, canonicalName);
+
+    // Create the new grouped item
+    const newItem: ShoppingItem = {
+      id: uuidv4(),
+      name: canonicalName,
+      quantity: aggregated.displayQuantity,
+      unit: aggregated.displayUnit,
+      storeSection: targetSection,
+      isChecked: false, // Grouped item starts unchecked
+      sourceRecipeIds: [
+        ...new Set(mergedSourceRecipeDetails.map((s) => s.recipeId).filter(Boolean)),
+      ],
+      sourceRecipeDetails: mergedSourceRecipeDetails,
+      isManual: itemsToGroup.every((item) => item.isManual),
+      isRecurring: false,
+      alternateUnits:
+        aggregated.alternateUnits.length > 0 ? aggregated.alternateUnits : undefined,
+      isEstimated: aggregated.isEstimated || undefined,
+      estimationNote: aggregated.estimationNote,
+      originalAmounts:
+        mergedOriginalAmounts.length > 0 ? mergedOriginalAmounts : undefined,
+    };
+
+    // Remove original items and add new grouped item
+    const updatedItems = list.items.filter((item) => !itemIds.includes(item.id));
+    updatedItems.push(newItem);
+    await this.updateList(listId, { items: updatedItems });
+
+    return newItem;
+  },
+
+  // Ungroup an item back into separate items
+  async ungroupItemInList(listId: string, itemId: string): Promise<ShoppingItem[]> {
+    const list = await this.getListById(listId);
+    if (!list) throw new Error('Shopping list not found');
+
+    const itemToUngroup = list.items.find((item) => item.id === itemId);
+    if (!itemToUngroup) throw new Error('Item not found');
+
+    if (
+      !itemToUngroup.sourceRecipeDetails ||
+      itemToUngroup.sourceRecipeDetails.length < 2
+    ) {
+      throw new Error('Item cannot be ungrouped - no sources to separate');
+    }
+
+    // Group source details by original ingredient name to create separate items
+    const groupedBySources = new Map<
+      string,
+      {
+        sources: SourceRecipeDetail[];
+        storeSection: string;
+      }
+    >();
+
+    for (const source of itemToUngroup.sourceRecipeDetails) {
+      const key = source.originalIngredientName.toLowerCase();
+      if (!groupedBySources.has(key)) {
+        groupedBySources.set(key, {
+          sources: [],
+          storeSection: itemToUngroup.storeSection,
+        });
+      }
+      groupedBySources.get(key)!.sources.push(source);
+    }
+
+    // Create separate items for each original ingredient
+    const newItems: ShoppingItem[] = [];
+
+    for (const [_key, group] of groupedBySources) {
+      const amounts = group.sources.map((s) => ({
+        quantity: s.quantity,
+        unit: s.unit,
+        recipeId: s.recipeId,
+        recipeName: s.recipeName,
+      }));
+      const aggregated = aggregateAmounts(amounts, group.sources[0].originalIngredientName);
+
+      const newItem: ShoppingItem = {
+        id: uuidv4(),
+        name: group.sources[0].originalIngredientName,
+        quantity: aggregated.displayQuantity,
+        unit: aggregated.displayUnit,
+        storeSection: group.storeSection,
+        isChecked: false,
+        sourceRecipeIds: [...new Set(group.sources.map((s) => s.recipeId).filter(Boolean))],
+        sourceRecipeDetails: group.sources,
+        isManual: group.sources.every((s) => !s.recipeId),
+        isRecurring: false,
+        alternateUnits:
+          aggregated.alternateUnits.length > 0 ? aggregated.alternateUnits : undefined,
+        isEstimated: aggregated.isEstimated || undefined,
+        originalAmounts:
+          aggregated.originalAmounts.length > 0 ? aggregated.originalAmounts : undefined,
+      };
+
+      newItems.push(newItem);
+    }
+
+    // Remove original grouped item and add new separate items
+    const updatedItems = list.items.filter((item) => item.id !== itemId);
+    updatedItems.push(...newItems);
+    await this.updateList(listId, { items: updatedItems });
+
+    return newItems;
+  },
+
+  // Partially ungroup an item - remove selected sources, keep rest grouped
+  async partialUngroupItemInList(
+    listId: string,
+    itemId: string,
+    sourceIndicesToRemove: number[]
+  ): Promise<{ removedItems: ShoppingItem[]; updatedGroupItem?: ShoppingItem }> {
+    const list = await this.getListById(listId);
+    if (!list) throw new Error('Shopping list not found');
+
+    const itemToUngroup = list.items.find((item) => item.id === itemId);
+    if (!itemToUngroup) throw new Error('Item not found');
+
+    if (!itemToUngroup.sourceRecipeDetails || itemToUngroup.sourceRecipeDetails.length === 0) {
+      throw new Error('Item has no sources to ungroup');
+    }
+
+    if (sourceIndicesToRemove.length === 0) {
+      throw new Error('No sources specified for removal');
+    }
+
+    // Separate sources into removed and remaining
+    const removedSources: SourceRecipeDetail[] = [];
+    const remainingSources: SourceRecipeDetail[] = [];
+
+    itemToUngroup.sourceRecipeDetails.forEach((source, index) => {
+      if (sourceIndicesToRemove.includes(index)) {
+        removedSources.push(source);
+      } else {
+        remainingSources.push(source);
+      }
+    });
+
+    if (removedSources.length === 0) {
+      throw new Error('No valid sources to remove');
+    }
+
+    // Group removed sources by original ingredient name
+    const groupedRemovedSources = new Map<
+      string,
+      {
+        sources: SourceRecipeDetail[];
+        storeSection: string;
+      }
+    >();
+
+    for (const source of removedSources) {
+      const key = source.originalIngredientName.toLowerCase();
+      if (!groupedRemovedSources.has(key)) {
+        groupedRemovedSources.set(key, {
+          sources: [],
+          storeSection: itemToUngroup.storeSection,
+        });
+      }
+      groupedRemovedSources.get(key)!.sources.push(source);
+    }
+
+    // Create new items for removed sources
+    const newItems: ShoppingItem[] = [];
+
+    for (const [_key, group] of groupedRemovedSources) {
+      const amounts = group.sources.map((s) => ({
+        quantity: s.quantity,
+        unit: s.unit,
+        recipeId: s.recipeId,
+        recipeName: s.recipeName,
+      }));
+      const aggregated = aggregateAmounts(amounts, group.sources[0].originalIngredientName);
+
+      const newItem: ShoppingItem = {
+        id: uuidv4(),
+        name: group.sources[0].originalIngredientName,
+        quantity: aggregated.displayQuantity,
+        unit: aggregated.displayUnit,
+        storeSection: group.storeSection,
+        isChecked: false,
+        sourceRecipeIds: [...new Set(group.sources.map((s) => s.recipeId).filter(Boolean))],
+        sourceRecipeDetails: group.sources,
+        isManual: group.sources.every((s) => !s.recipeId),
+        isRecurring: false,
+        alternateUnits:
+          aggregated.alternateUnits.length > 0 ? aggregated.alternateUnits : undefined,
+        isEstimated: aggregated.isEstimated || undefined,
+        originalAmounts:
+          aggregated.originalAmounts.length > 0 ? aggregated.originalAmounts : undefined,
+      };
+
+      newItems.push(newItem);
+    }
+
+    let updatedGroupItem: ShoppingItem | undefined;
+    let updatedItems = list.items.filter((item) => item.id !== itemId);
+
+    // Handle remaining sources
+    if (remainingSources.length === 0) {
+      // All sources removed, delete the grouped item entirely
+      updatedGroupItem = undefined;
+    } else if (remainingSources.length === 1) {
+      // Only 1 source remaining, convert to non-grouped item
+      const singleSource = remainingSources[0];
+      updatedGroupItem = {
+        id: uuidv4(),
+        name: singleSource.originalIngredientName,
+        quantity: singleSource.quantity,
+        unit: singleSource.unit,
+        storeSection: itemToUngroup.storeSection,
+        isChecked: itemToUngroup.isChecked,
+        sourceRecipeIds: singleSource.recipeId ? [singleSource.recipeId] : [],
+        sourceRecipeDetails: remainingSources,
+        isManual: !singleSource.recipeId,
+        isRecurring: false,
+      };
+      updatedItems.push(updatedGroupItem);
+    } else {
+      // Multiple sources remaining, update the grouped item with remaining sources
+      const amounts = remainingSources.map((s) => ({
+        quantity: s.quantity,
+        unit: s.unit,
+        recipeId: s.recipeId,
+        recipeName: s.recipeName,
+      }));
+      const aggregated = aggregateAmounts(amounts, itemToUngroup.name);
+
+      updatedGroupItem = {
+        ...itemToUngroup,
+        quantity: aggregated.displayQuantity,
+        unit: aggregated.displayUnit,
+        sourceRecipeIds: [...new Set(remainingSources.map((s) => s.recipeId).filter(Boolean))],
+        sourceRecipeDetails: remainingSources,
+        alternateUnits:
+          aggregated.alternateUnits.length > 0 ? aggregated.alternateUnits : undefined,
+        isEstimated: aggregated.isEstimated || undefined,
+        estimationNote: aggregated.estimationNote,
+        originalAmounts:
+          aggregated.originalAmounts.length > 0 ? aggregated.originalAmounts : undefined,
+      };
+      updatedItems.push(updatedGroupItem);
+    }
+
+    // Add new separate items
+    updatedItems.push(...newItems);
+    await this.updateList(listId, { items: updatedItems });
+
+    return { removedItems: newItems, updatedGroupItem };
+  },
+
   // Bulk operations
   async bulkAddLists(lists: ShoppingList[]): Promise<void> {
     await db.shoppingLists.bulkAdd(lists);

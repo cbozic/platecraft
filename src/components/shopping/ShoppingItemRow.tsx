@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Check, Trash2, Edit2, X, Save, ChevronDown, RefreshCw } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Check, Trash2, Edit2, X, Save, ChevronDown, RefreshCw, Link as LinkIcon, Unlink } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import type { ShoppingItem } from '@/types';
 import { UNIT_INFO } from '@/types/units';
@@ -11,9 +11,24 @@ interface ShoppingItemRowProps {
   onUpdate: (id: string, updates: Partial<ShoppingItem>) => void;
   onDelete: (id: string) => void;
   onNavigateToRecipe?: (recipeId: string) => void;
+  // Selection mode props
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (id: string, selected: boolean) => void;
+  onUngroup?: (id: string) => void;
 }
 
-export function ShoppingItemRow({ item, onToggle, onUpdate, onDelete, onNavigateToRecipe }: ShoppingItemRowProps) {
+export function ShoppingItemRow({
+  item,
+  onToggle,
+  onUpdate,
+  onDelete,
+  onNavigateToRecipe,
+  isSelectionMode = false,
+  isSelected = false,
+  onSelect,
+  onUngroup,
+}: ShoppingItemRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [editName, setEditName] = useState(item.name);
@@ -26,6 +41,20 @@ export function ShoppingItemRow({ item, onToggle, onUpdate, onDelete, onNavigate
   // Check if item has recipe sources (expandable for any item with at least 1 recipe)
   const hasRecipeSources = item.sourceRecipeDetails && item.sourceRecipeDetails.length > 0;
   const hasMultipleRecipes = item.sourceRecipeDetails && item.sourceRecipeDetails.length > 1;
+
+  // Check if item is grouped (has multiple different original ingredient names)
+  const isGrouped = useMemo(() => {
+    if (!item.sourceRecipeDetails || item.sourceRecipeDetails.length < 2) {
+      return false;
+    }
+    const originalNames = new Set(
+      item.sourceRecipeDetails.map((s) => s.originalIngredientName.toLowerCase())
+    );
+    return originalNames.size > 1;
+  }, [item.sourceRecipeDetails]);
+
+  // Check if item can be ungrouped - allow ungrouping any item with multiple sources
+  const canUngroup = hasMultipleRecipes && onUngroup;
 
   // Check if item has alternate units for toggling
   const hasAlternateUnits = item.alternateUnits && item.alternateUnits.length > 0;
@@ -70,8 +99,22 @@ export function ShoppingItemRow({ item, onToggle, onUpdate, onDelete, onNavigate
     const target = e.target as HTMLElement;
     if (target.closest(`.${styles.checkbox}`) || target.closest(`.${styles.actions}`)) return;
 
+    // In selection mode, toggle selection on row click
+    if (isSelectionMode) {
+      onSelect?.(item.id, !isSelected);
+      return;
+    }
+
     if (hasRecipeSources) {
       setIsExpanded(!isExpanded);
+    }
+  };
+
+  const handleCheckboxClick = () => {
+    if (isSelectionMode) {
+      onSelect?.(item.id, !isSelected);
+    } else {
+      onToggle(item.id);
     }
   };
 
@@ -130,20 +173,37 @@ export function ShoppingItemRow({ item, onToggle, onUpdate, onDelete, onNavigate
   return (
     <div className={styles.rowContainer}>
       <div
-        className={`${styles.row} ${item.isChecked ? styles.checked : ''} ${hasRecipeSources ? styles.expandable : ''}`}
+        className={`${styles.row} ${item.isChecked && !isSelectionMode ? styles.checked : ''} ${hasRecipeSources && !isSelectionMode ? styles.expandable : ''} ${isSelectionMode ? styles.selectable : ''} ${isSelected ? styles.selected : ''}`}
         onClick={handleRowClick}
       >
         <button
           type="button"
-          className={styles.checkbox}
-          onClick={() => onToggle(item.id)}
-          aria-label={item.isChecked ? 'Uncheck item' : 'Check item'}
+          className={`${styles.checkbox} ${isSelectionMode ? styles.selectionCheckbox : ''}`}
+          onClick={handleCheckboxClick}
+          aria-label={
+            isSelectionMode
+              ? isSelected
+                ? 'Deselect item'
+                : 'Select item'
+              : item.isChecked
+                ? 'Uncheck item'
+                : 'Check item'
+          }
         >
-          {item.isChecked && <Check size={14} />}
+          {isSelectionMode ? (
+            isSelected && <Check size={14} />
+          ) : (
+            item.isChecked && <Check size={14} />
+          )}
         </button>
 
         <div className={styles.content}>
           <span className={styles.name}>{item.name}</span>
+          {isGrouped && !isSelectionMode && (
+            <span className={styles.groupedIcon} title="Grouped ingredients">
+              <LinkIcon size={12} />
+            </span>
+          )}
           {formatQuantity() && (
             <span className={styles.quantityGroup}>
               <span className={styles.quantity}>{formatQuantity()}</span>
@@ -183,6 +243,21 @@ export function ShoppingItemRow({ item, onToggle, onUpdate, onDelete, onNavigate
               className={`${styles.expandIcon} ${isExpanded ? styles.expanded : ''}`}
             />
           )}
+          {canUngroup && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUngroup?.(item.id);
+              }}
+              aria-label="Ungroup item"
+              title="Ungroup items"
+              className="no-print"
+            >
+              <Unlink size={16} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -205,26 +280,42 @@ export function ShoppingItemRow({ item, onToggle, onUpdate, onDelete, onNavigate
       </div>
 
       {/* Recipe breakdown panel */}
-      {isExpanded && hasRecipeSources && (
+      {isExpanded && hasRecipeSources && !isSelectionMode && (
         <div className={styles.recipeBreakdown}>
           {item.sourceRecipeDetails!.map((source, index) => (
             <button
               key={`${source.recipeId}-${index}`}
               type="button"
               className={styles.recipeRow}
-              onClick={() => onNavigateToRecipe?.(source.recipeId)}
+              onClick={() => source.recipeId && onNavigateToRecipe?.(source.recipeId)}
+              disabled={!source.recipeId}
             >
-              <span className={styles.recipeName}>{source.recipeName}</span>
-              <span className={styles.recipeQuantity}>
-                {formatQuantity(source.quantity, source.unit)}
-                {source.originalIngredientName !== item.name && (
-                  <span className={styles.originalName}>
-                    ({source.originalIngredientName})
-                  </span>
-                )}
+              <span className={styles.recipeRowOriginalName}>
+                {source.originalIngredientName || source.recipeName}
               </span>
+              <div className={styles.recipeRowDetails}>
+                <span className={styles.recipeRowQuantity}>
+                  {formatQuantity(source.quantity, source.unit)}
+                </span>
+                <span className={styles.recipeRowRecipeName}>
+                  {source.recipeName}
+                </span>
+              </div>
             </button>
           ))}
+          {canUngroup && (
+            <button
+              type="button"
+              className={styles.ungroupButton}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUngroup?.(item.id);
+              }}
+            >
+              <Unlink size={14} />
+              Ungroup Items
+            </button>
+          )}
         </div>
       )}
     </div>

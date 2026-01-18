@@ -10,7 +10,7 @@ import {
   GeneratingListModal,
 } from '@/components/shopping';
 import { useShoppingList } from '@/hooks';
-import type { ShoppingList, PendingIngredientMatch } from '@/types';
+import type { ShoppingList, PendingIngredientMatch, RefinedIngredientGroup } from '@/types';
 import styles from './ShoppingPage.module.css';
 
 interface LocationState {
@@ -40,9 +40,13 @@ export function ShoppingPage() {
     removeItem,
     uncheckAll,
     clearChecked,
+    groupItems,
+    ungroupItem,
+    partialUngroupItem,
     confirmIngredientMatch,
     rejectIngredientMatch,
     confirmAllIngredientMatches,
+    confirmRefinedIngredientGroups,
   } = useShoppingList();
 
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -144,6 +148,52 @@ export function ShoppingPage() {
     setPendingMatches([]);
   }, []);
 
+  const handleConfirmRefined = useCallback(
+    async (groups: RefinedIngredientGroup[]) => {
+      await confirmRefinedIngredientGroups(groups);
+    },
+    [confirmRefinedIngredientGroups]
+  );
+
+  // Handlers for grouping/ungrouping items
+  const handleGroupItems = useCallback(
+    async (
+      itemIds: string[],
+      canonicalName: string,
+      targetSection: string,
+      saveMapping: boolean
+    ) => {
+      try {
+        await groupItems(itemIds, canonicalName, targetSection, saveMapping);
+      } catch (error) {
+        console.error('Failed to group items:', error);
+      }
+    },
+    [groupItems]
+  );
+
+  const handleUngroupItem = useCallback(
+    async (itemId: string) => {
+      try {
+        await ungroupItem(itemId);
+      } catch (error) {
+        console.error('Failed to ungroup item:', error);
+      }
+    },
+    [ungroupItem]
+  );
+
+  const handlePartialUngroupItem = useCallback(
+    async (itemId: string, sourceIndices: number[]) => {
+      try {
+        await partialUngroupItem(itemId, sourceIndices);
+      } catch (error) {
+        console.error('Failed to partially ungroup item:', error);
+      }
+    },
+    [partialUngroupItem]
+  );
+
   const handleCreateEmpty = useCallback(async () => {
     const name = `Shopping List - ${format(new Date(), 'MMM d, yyyy')}`;
     try {
@@ -233,6 +283,9 @@ export function ShoppingPage() {
           onDuplicate={handleDuplicateList}
           onDelete={handleDeleteList}
           onNavigateToRecipe={handleNavigateToRecipe}
+          onGroupItems={handleGroupItems}
+          onUngroupItem={handleUngroupItem}
+          onPartialUngroupItem={handlePartialUngroupItem}
         />
 
         <IngredientMatchModal
@@ -243,6 +296,7 @@ export function ShoppingPage() {
           onReject={handleRejectMatch}
           onConfirmAll={handleConfirmAllMatches}
           onSkipAll={handleSkipAllMatches}
+          onConfirmRefined={handleConfirmRefined}
         />
       </div>
     );

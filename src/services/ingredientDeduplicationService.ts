@@ -1,6 +1,6 @@
 import { settingsRepository } from '@/db';
 import { ingredientMappingRepository } from '@/db/repositories';
-import type { PendingIngredientMatch, IngredientMapping, MeasurementUnit } from '@/types';
+import type { PendingIngredientMatch, IngredientMapping, MeasurementUnit, RefinedIngredientGroup } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { UNIT_INFO } from '@/types/units';
 import {
@@ -345,6 +345,49 @@ export const ingredientDeduplicationService = {
       const mapping = await this.confirmMatch(match);
       results.push(mapping);
     }
+    return results;
+  },
+
+  /**
+   * Confirm refined ingredient groups (for manual splitting/regrouping)
+   * Only creates mappings for groups with 2+ ingredients
+   */
+  async confirmRefinedGroups(groups: RefinedIngredientGroup[]): Promise<IngredientMapping[]> {
+    const results: IngredientMapping[] = [];
+
+    for (const group of groups) {
+      // Skip single-ingredient groups - no mapping needed
+      if (group.ingredientNames.length < 2) {
+        continue;
+      }
+
+      // Use the canonical name, or fall back to first ingredient name
+      const canonicalName = group.canonicalName.trim() || group.ingredientNames[0];
+
+      // Check if a mapping already exists for this canonical name
+      const existing = await ingredientMappingRepository.getByCanonicalName(canonicalName);
+
+      if (existing) {
+        // Add new variants to existing mapping
+        for (const name of group.ingredientNames) {
+          if (name.toLowerCase() !== existing.canonicalName.toLowerCase()) {
+            await ingredientMappingRepository.addVariant(existing.id, name);
+          }
+        }
+        const updated = await ingredientMappingRepository.getById(existing.id);
+        if (updated) {
+          results.push(updated);
+        }
+      } else {
+        // Create new mapping
+        const variants = group.ingredientNames.filter(
+          (n) => n.toLowerCase() !== canonicalName.toLowerCase()
+        );
+        const mapping = await ingredientMappingRepository.create(canonicalName, variants, true);
+        results.push(mapping);
+      }
+    }
+
     return results;
   },
 

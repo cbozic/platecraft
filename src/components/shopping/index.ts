@@ -4,3 +4,6 @@ export { AddItemModal } from './AddItemModal';
 export { ShoppingListDetail } from './ShoppingListDetail';
 export { IngredientMatchModal } from './IngredientMatchModal';
 export { GeneratingListModal } from './GeneratingListModal';
+export { SelectionActionBar } from './SelectionActionBar';
+export { GroupingModal } from './GroupingModal';
+export { UngroupingModal } from './UngroupingModal';
