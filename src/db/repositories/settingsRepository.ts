@@ -333,6 +333,16 @@ export const settingsRepository = {
     return settings.lastBackupDate ? new Date(settings.lastBackupDate) : undefined;
   },
 
+  // Import tracking
+  async setLastImportDate(date: Date): Promise<void> {
+    await this.update({ lastImportDate: date.toISOString() });
+  },
+
+  async getLastImportDate(): Promise<Date | undefined> {
+    const settings = await this.get();
+    return settings.lastImportDate ? new Date(settings.lastImportDate) : undefined;
+  },
+
   // Reset to defaults
   async reset(): Promise<void> {
     await db.settings.put({ ...DEFAULT_SETTINGS, id: SETTINGS_ID });

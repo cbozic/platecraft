@@ -746,6 +746,9 @@ export const dataService = {
         }
       }
 
+      // Track the import date
+      await settingsRepository.setLastImportDate(new Date());
+
       return {
         success: errors.length === 0,
         errors,

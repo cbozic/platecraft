@@ -708,6 +708,11 @@ export function SettingsPage() {
                   <strong>{dataStats.mealPlans}</strong> planned meals,{' '}
                   <strong>{dataStats.shoppingLists}</strong> shopping lists
                 </p>
+                {settings.lastImportDate && (
+                  <p className={styles.lastImportDate}>
+                    Last import: {new Date(settings.lastImportDate).toLocaleDateString()}
+                  </p>
+                )}
               </div>
             )}
             <div className={styles.dataActions}>

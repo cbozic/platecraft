@@ -127,6 +127,12 @@
   color: var(--color-text-primary);
 }
 
+.dataStats .lastImportDate {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
 .dataActions {
   display: flex;
   flex-wrap: wrap;
