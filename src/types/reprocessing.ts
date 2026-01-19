@@ -1,7 +1,7 @@
 import type { NutritionInfo } from './recipe';
 
 // Fields that can be reprocessed
-export type ReprocessableField = 'nutrition' | 'prepTimeMinutes' | 'cookTimeMinutes' | 'description';
+export type ReprocessableField = 'nutrition' | 'prepTimeMinutes' | 'cookTimeMinutes' | 'description' | 'capitalization';
 
 // Configuration for which fields to check/reprocess
 export interface ReprocessingConfig {

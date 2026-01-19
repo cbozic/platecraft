@@ -10,6 +10,11 @@ import type {
 } from '@/types/reprocessing';
 import { imageService } from './imageService';
 import { generateReprocessingVisionPrompt, parseReprocessingResponse } from '@/types/import';
+import {
+  analyzeCapitalization,
+  applyCapitalizationChanges,
+  type CapitalizationChange,
+} from '@/utils/capitalization';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
@@ -67,7 +72,7 @@ export const recipeReprocessingService = {
   },
 
   /**
-   * Check if a specific field is blank
+   * Check if a specific field is blank (or needs processing for capitalization)
    */
   isFieldBlank(recipe: Recipe, field: ReprocessableField): boolean {
     switch (field) {
@@ -79,6 +84,9 @@ export const recipeReprocessingService = {
         return recipe.cookTimeMinutes === undefined || recipe.cookTimeMinutes === null;
       case 'description':
         return !recipe.description || recipe.description.trim() === '';
+      case 'capitalization':
+        // Check if recipe has ALL CAPS issues that need fixing
+        return analyzeCapitalization(recipe).needsFixes;
       default:
         return false;
     }
@@ -346,11 +354,13 @@ export const recipeReprocessingService = {
     }
 
     // Step 2: If fields remain and source photo exists, try vision
-    if (remainingFields.length > 0 && sourcePhotos.length > 0) {
-      const visionData = await this.reanalyzeWithVision(sourcePhotos, remainingFields, hint);
+    // Filter out 'capitalization' as it doesn't use vision
+    const visionFields = remainingFields.filter((f) => f !== 'capitalization');
+    if (visionFields.length > 0 && sourcePhotos.length > 0) {
+      const visionData = await this.reanalyzeWithVision(sourcePhotos, visionFields, hint);
 
       if (visionData) {
-        for (const field of remainingFields) {
+        for (const field of visionFields) {
           const value = this.getExtractedValue(visionData, field);
           if (value !== undefined) {
             proposedChanges.push({
@@ -369,6 +379,19 @@ export const recipeReprocessingService = {
         if (visionData.referencePageNumber) {
           result.extractedPageNumber = visionData.referencePageNumber;
         }
+      }
+    }
+
+    // Step 3: Handle capitalization fixes (local analysis, no API call needed)
+    if (config.fields.includes('capitalization')) {
+      const capitalizationAnalysis = analyzeCapitalization(recipe);
+      if (capitalizationAnalysis.needsFixes) {
+        proposedChanges.push({
+          field: 'capitalization',
+          oldValue: undefined,
+          newValue: capitalizationAnalysis.changes,
+          source: 'notes', // Use 'notes' as source since it's local analysis
+        });
       }
     }
 
@@ -412,6 +435,33 @@ export const recipeReprocessingService = {
       try {
         const updates: Partial<RecipeFormData> = {};
 
+        // Check if we need to apply capitalization changes
+        const capitalizationChange = fieldChanges.find((c) => c.field === 'capitalization');
+        if (capitalizationChange) {
+          // Need to fetch recipe to apply capitalization changes
+          const recipe = await recipeRepository.getById(recipeId);
+          if (recipe) {
+            const capitalizationUpdates = applyCapitalizationChanges(
+              recipe,
+              capitalizationChange.newValue as CapitalizationChange[]
+            );
+            // Merge capitalization updates
+            if (capitalizationUpdates.title) updates.title = capitalizationUpdates.title;
+            if (capitalizationUpdates.description)
+              updates.description = capitalizationUpdates.description;
+            if (capitalizationUpdates.instructions)
+              updates.instructions = capitalizationUpdates.instructions;
+            if (capitalizationUpdates.notes) updates.notes = capitalizationUpdates.notes;
+            if (capitalizationUpdates.ingredients) {
+              updates.ingredients = capitalizationUpdates.ingredients.map((ingredient) => {
+                const { id: _, ...rest } = ingredient;
+                void _;
+                return rest;
+              });
+            }
+          }
+        }
+
         for (const change of fieldChanges) {
           switch (change.field) {
             case 'nutrition':
@@ -424,7 +474,13 @@ export const recipeReprocessingService = {
               updates.cookTimeMinutes = change.newValue as number;
               break;
             case 'description':
-              updates.description = change.newValue as string;
+              // Only set if not already set by capitalization
+              if (!updates.description) {
+                updates.description = change.newValue as string;
+              }
+              break;
+            case 'capitalization':
+              // Already handled above
               break;
           }
         }

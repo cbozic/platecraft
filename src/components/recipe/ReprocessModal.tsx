@@ -10,6 +10,7 @@ import type {
   ApprovedChanges,
 } from '@/types/reprocessing';
 import { recipeReprocessingService } from '@/services/recipeReprocessingService';
+import type { CapitalizationChange } from '@/utils/capitalization';
 import styles from './ReprocessModal.module.css';
 
 type Step =
@@ -33,6 +34,11 @@ const FIELD_LABELS: Record<ReprocessableField, string> = {
   prepTimeMinutes: 'Prep Time',
   cookTimeMinutes: 'Cook Time',
   description: 'Description',
+  capitalization: 'Fix Capitalization',
+};
+
+const FIELD_DESCRIPTIONS: Partial<Record<ReprocessableField, string>> = {
+  capitalization: 'Fix lowercase or ALL CAPS titles and text',
 };
 
 export function ReprocessModal({
@@ -51,7 +57,12 @@ export function ReprocessModal({
     stage: 'scanning',
   });
   const [results, setResults] = useState<RecipeReprocessingResult[]>([]);
-  const [selectedChanges, setSelectedChanges] = useState<Map<string, boolean>>(new Map());
+  const [selectedChanges, setSelectedChanges] = useState<Map<string, Set<ReprocessableField>>>(new Map());
+  // Track individual capitalization change selections (recipeId -> set of change indices)
+  const [selectedCapIndices, setSelectedCapIndices] = useState<Map<string, Set<number>>>(new Map());
+  // Track extracted field selections (cookbook, pageNumber)
+  type ExtractedField = 'cookbook' | 'pageNumber';
+  const [selectedExtracted, setSelectedExtracted] = useState<Map<string, Set<ExtractedField>>>(new Map());
   const [applyResult, setApplyResult] = useState<{ success: number; failed: number } | null>(null);
   const [isCancelled, setIsCancelled] = useState(false);
   const [userHint, setUserHint] = useState('');
@@ -68,6 +79,8 @@ export function ReprocessModal({
     });
     setResults([]);
     setSelectedChanges(new Map());
+    setSelectedCapIndices(new Map());
+    setSelectedExtracted(new Map());
     setApplyResult(null);
     setIsCancelled(false);
     setUserHint('');
@@ -198,8 +211,28 @@ export function ReprocessModal({
         processedResult.extractedPageNumber;
       if (hasChanges) {
         changesCount++;
-        // Auto-select recipes with changes
-        setSelectedChanges((prev) => new Map(prev).set(processedResult.recipeId, true));
+        // Auto-select all fields for recipes with changes
+        const fieldSet = new Set<ReprocessableField>(
+          processedResult.proposedChanges.map(c => c.field)
+        );
+        setSelectedChanges((prev) => new Map(prev).set(processedResult.recipeId, fieldSet));
+
+        // Auto-select all capitalization sub-changes if present
+        const capChange = processedResult.proposedChanges.find(c => c.field === 'capitalization');
+        if (capChange && Array.isArray(capChange.newValue)) {
+          const capIndices = new Set<number>(
+            capChange.newValue.map((_, idx) => idx)
+          );
+          setSelectedCapIndices((prev) => new Map(prev).set(processedResult.recipeId, capIndices));
+        }
+
+        // Auto-select extracted fields (cookbook, pageNumber)
+        const extractedSet = new Set<ExtractedField>();
+        if (processedResult.extractedCookbook) extractedSet.add('cookbook');
+        if (processedResult.extractedPageNumber) extractedSet.add('pageNumber');
+        if (extractedSet.size > 0) {
+          setSelectedExtracted((prev) => new Map(prev).set(processedResult.recipeId, extractedSet));
+        }
       }
 
       setProgress((prev) => ({
@@ -225,58 +258,306 @@ export function ReprocessModal({
   };
 
   const handleToggleRecipeSelection = (recipeId: string) => {
+    const result = results.find(r => r.recipeId === recipeId);
+    if (!result) return;
+
+    // Check current selection state
+    const currentFields = selectedChanges.get(recipeId);
+    const currentExtracted = selectedExtracted.get(recipeId);
+    const currentCapIndices = selectedCapIndices.get(recipeId);
+
+    const allFields = new Set<ReprocessableField>(result.proposedChanges.map(c => c.field));
+    const allExtracted = new Set<ExtractedField>();
+    if (result.extractedCookbook) allExtracted.add('cookbook');
+    if (result.extractedPageNumber) allExtracted.add('pageNumber');
+
+    // Check if all are currently selected
+    const fieldsAllSelected = allFields.size === 0 || (currentFields && [...allFields].every(f => currentFields.has(f)));
+    const extractedAllSelected = allExtracted.size === 0 || (currentExtracted && [...allExtracted].every(f => currentExtracted.has(f)));
+
+    // Check capitalization sub-selections
+    const capChange = result.proposedChanges.find(c => c.field === 'capitalization');
+    const capTotal = capChange && Array.isArray(capChange.newValue) ? capChange.newValue.length : 0;
+    const capAllSelected = capTotal === 0 || (currentCapIndices && currentCapIndices.size >= capTotal);
+
+    const allSelected = fieldsAllSelected && extractedAllSelected && capAllSelected;
+
+    // Toggle all selections
     setSelectedChanges((prev) => {
       const newMap = new Map(prev);
-      newMap.set(recipeId, !newMap.get(recipeId));
+      newMap.set(recipeId, allSelected ? new Set() : allFields);
+      return newMap;
+    });
+
+    setSelectedExtracted((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(recipeId, allSelected ? new Set() : allExtracted);
+      return newMap;
+    });
+
+    // Also toggle capitalization sub-selections
+    if (capTotal > 0) {
+      setSelectedCapIndices((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(recipeId, allSelected ? new Set() : new Set(Array.from({ length: capTotal }, (_, i) => i)));
+        return newMap;
+      });
+    }
+  };
+
+  const handleToggleFieldSelection = (recipeId: string, field: ReprocessableField) => {
+    setSelectedChanges((prev) => {
+      const newMap = new Map(prev);
+      const currentSet = new Set(prev.get(recipeId) || []);
+
+      if (currentSet.has(field)) {
+        currentSet.delete(field);
+      } else {
+        currentSet.add(field);
+      }
+
+      newMap.set(recipeId, currentSet);
+      return newMap;
+    });
+  };
+
+  const handleToggleCapChange = (recipeId: string, index: number) => {
+    setSelectedCapIndices((prev) => {
+      const newMap = new Map(prev);
+      const currentSet = new Set(prev.get(recipeId) || []);
+
+      if (currentSet.has(index)) {
+        currentSet.delete(index);
+      } else {
+        currentSet.add(index);
+      }
+
+      newMap.set(recipeId, currentSet);
+
+      // Sync field-level selection: add/remove 'capitalization' based on sub-selection
+      setSelectedChanges((fieldPrev) => {
+        const fieldMap = new Map(fieldPrev);
+        const fieldSet = new Set(fieldPrev.get(recipeId) || []);
+        if (currentSet.size > 0) {
+          fieldSet.add('capitalization');
+        } else {
+          fieldSet.delete('capitalization');
+        }
+        fieldMap.set(recipeId, fieldSet);
+        return fieldMap;
+      });
+
+      return newMap;
+    });
+  };
+
+  const handleToggleAllCapChanges = (recipeId: string, totalChanges: number) => {
+    setSelectedCapIndices((prev) => {
+      const newMap = new Map(prev);
+      const currentSet = prev.get(recipeId);
+      const allSelected = currentSet && currentSet.size >= totalChanges;
+
+      const newSet = allSelected
+        ? new Set<number>()
+        : new Set(Array.from({ length: totalChanges }, (_, i) => i));
+      newMap.set(recipeId, newSet);
+
+      // Sync field-level selection
+      setSelectedChanges((fieldPrev) => {
+        const fieldMap = new Map(fieldPrev);
+        const fieldSet = new Set(fieldPrev.get(recipeId) || []);
+        if (newSet.size > 0) {
+          fieldSet.add('capitalization');
+        } else {
+          fieldSet.delete('capitalization');
+        }
+        fieldMap.set(recipeId, fieldSet);
+        return fieldMap;
+      });
+
+      return newMap;
+    });
+  };
+
+  const handleToggleExtracted = (recipeId: string, field: ExtractedField) => {
+    setSelectedExtracted((prev) => {
+      const newMap = new Map(prev);
+      const currentSet = new Set(prev.get(recipeId) || []);
+
+      if (currentSet.has(field)) {
+        currentSet.delete(field);
+      } else {
+        currentSet.add(field);
+      }
+
+      newMap.set(recipeId, currentSet);
       return newMap;
     });
   };
 
   const handleSelectAll = () => {
-    const newMap = new Map<string, boolean>();
+    const newFieldMap = new Map<string, Set<ReprocessableField>>();
+    const newCapMap = new Map<string, Set<number>>();
+    const newExtractedMap = new Map<string, Set<ExtractedField>>();
+
     results
-      .filter((r) => r.proposedChanges.length > 0)
-      .forEach((r) => newMap.set(r.recipeId, true));
-    setSelectedChanges(newMap);
+      .filter((r) => r.proposedChanges.length > 0 || r.extractedCookbook || r.extractedPageNumber)
+      .forEach((r) => {
+        newFieldMap.set(r.recipeId, new Set(r.proposedChanges.map(c => c.field)));
+
+        // Also select all capitalization sub-changes
+        const capChange = r.proposedChanges.find(c => c.field === 'capitalization');
+        if (capChange && Array.isArray(capChange.newValue)) {
+          newCapMap.set(r.recipeId, new Set(capChange.newValue.map((_, i) => i)));
+        }
+
+        // Also select extracted fields
+        const extractedSet = new Set<ExtractedField>();
+        if (r.extractedCookbook) extractedSet.add('cookbook');
+        if (r.extractedPageNumber) extractedSet.add('pageNumber');
+        if (extractedSet.size > 0) {
+          newExtractedMap.set(r.recipeId, extractedSet);
+        }
+      });
+
+    setSelectedChanges(newFieldMap);
+    setSelectedCapIndices(newCapMap);
+    setSelectedExtracted(newExtractedMap);
   };
 
   const handleDeselectAll = () => {
     setSelectedChanges(new Map());
+    setSelectedCapIndices(new Map());
+    setSelectedExtracted(new Map());
   };
 
   const handleApplyChanges = async () => {
     setStep('applying');
-
     const changesToApply: ApprovedChanges = new Map();
 
+    // Filter results to only include selected extracted fields
+    const filteredResults = results.map((result) => {
+      const extractedSel = selectedExtracted.get(result.recipeId);
+      return {
+        ...result,
+        extractedCookbook: extractedSel?.has('cookbook') ? result.extractedCookbook : undefined,
+        extractedPageNumber: extractedSel?.has('pageNumber') ? result.extractedPageNumber : undefined,
+      };
+    });
+
     for (const result of results) {
-      const isSelected = selectedChanges.get(result.recipeId);
-      const hasChanges =
-        result.proposedChanges.length > 0 ||
-        result.extractedCookbook ||
-        result.extractedPageNumber;
-      if (isSelected && hasChanges) {
-        changesToApply.set(result.recipeId, result.proposedChanges);
+      const selectedFields = selectedChanges.get(result.recipeId);
+      const extractedSel = selectedExtracted.get(result.recipeId);
+      const hasSelectedFields = selectedFields && selectedFields.size > 0;
+      const hasSelectedExtracted = extractedSel && extractedSel.size > 0;
+
+      if (!hasSelectedFields && !hasSelectedExtracted) continue;
+
+      const selectedFieldChanges: typeof result.proposedChanges = [];
+
+      if (hasSelectedFields) {
+        for (const change of result.proposedChanges) {
+          if (!selectedFields!.has(change.field)) continue;
+
+          if (change.field === 'capitalization' && Array.isArray(change.newValue)) {
+            // Filter to only selected capitalization changes
+            const capIndices = selectedCapIndices.get(result.recipeId);
+            if (!capIndices || capIndices.size === 0) continue;
+
+            const filteredCapChanges = change.newValue.filter((_, idx) => capIndices.has(idx));
+            if (filteredCapChanges.length > 0) {
+              selectedFieldChanges.push({
+                ...change,
+                newValue: filteredCapChanges,
+              });
+            }
+          } else {
+            selectedFieldChanges.push(change);
+          }
+        }
+      }
+
+      // Include recipe if it has field changes OR extracted fields selected
+      if (selectedFieldChanges.length > 0 || hasSelectedExtracted) {
+        changesToApply.set(result.recipeId, selectedFieldChanges);
       }
     }
 
-    const applyResultData = await recipeReprocessingService.applyChanges(changesToApply, results);
+    const applyResultData = await recipeReprocessingService.applyChanges(changesToApply, filteredResults);
     setApplyResult(applyResultData);
     setStep('complete');
   };
 
   const handleComplete = () => {
-    const updatedIds = Array.from(selectedChanges.entries())
-      .filter(([, selected]) => selected)
-      .map(([id]) => id);
-    onComplete(updatedIds);
+    // Collect recipe IDs that have any selection (field changes or extracted fields)
+    const updatedIds = new Set<string>();
+    for (const [id, fieldSet] of selectedChanges.entries()) {
+      if (fieldSet.size > 0) updatedIds.add(id);
+    }
+    for (const [id, extractedSet] of selectedExtracted.entries()) {
+      if (extractedSet.size > 0) updatedIds.add(id);
+    }
+    onComplete(Array.from(updatedIds));
     handleClose();
   };
 
   const recipesWithChanges = results.filter(
     (r) => r.proposedChanges.length > 0 || r.extractedCookbook || r.extractedPageNumber
   );
-  const selectedCount = Array.from(selectedChanges.values()).filter(Boolean).length;
+
+  // Count selected changes, expanding capitalization to individual sub-changes
+  const selectedCount = results.reduce((total, result) => {
+    const selectedFields = selectedChanges.get(result.recipeId);
+    const extractedSel = selectedExtracted.get(result.recipeId);
+
+    let count = 0;
+
+    // Count field changes
+    if (selectedFields) {
+      for (const field of selectedFields) {
+        if (field === 'capitalization') {
+          // Count individual cap changes
+          const capIndices = selectedCapIndices.get(result.recipeId);
+          count += capIndices?.size || 0;
+        } else {
+          count += 1;
+        }
+      }
+    }
+
+    // Count extracted fields
+    if (extractedSel) {
+      count += extractedSel.size;
+    }
+
+    return total + count;
+  }, 0);
+
+  const getRecipeSelectionState = (result: RecipeReprocessingResult): 'all' | 'none' | 'partial' => {
+    const selectedFields = selectedChanges.get(result.recipeId);
+    const extractedSel = selectedExtracted.get(result.recipeId);
+
+    // Total possible selections for this recipe
+    const totalFields = result.proposedChanges.length;
+    const totalExtracted = (result.extractedCookbook ? 1 : 0) + (result.extractedPageNumber ? 1 : 0);
+    const totalPossible = totalFields + totalExtracted;
+
+    // Current selections
+    const fieldCount = selectedFields?.size || 0;
+    const extractedCount = extractedSel?.size || 0;
+    const currentSelected = fieldCount + extractedCount;
+
+    if (currentSelected === 0) return 'none';
+    if (currentSelected >= totalPossible) return 'all';
+    return 'partial';
+  };
+
+  const getCapSelectionState = (recipeId: string, totalChanges: number): 'all' | 'none' | 'partial' => {
+    const selectedIndices = selectedCapIndices.get(recipeId);
+    if (!selectedIndices || selectedIndices.size === 0) return 'none';
+    if (selectedIndices.size >= totalChanges) return 'all';
+    return 'partial';
+  };
 
   const formatFieldValue = (field: ReprocessableField, value: unknown): string => {
     if (field === 'nutrition' && value) {
@@ -286,10 +567,50 @@ export function ReprocessModal({
     if (field === 'prepTimeMinutes' || field === 'cookTimeMinutes') {
       return `${value} min`;
     }
+    if (field === 'capitalization' && Array.isArray(value)) {
+      const changes = value as CapitalizationChange[];
+      const count = changes.length;
+      return `${count} field${count !== 1 ? 's' : ''} to fix`;
+    }
     if (typeof value === 'string') {
       return value.length > 50 ? value.substring(0, 50) + '...' : value;
     }
     return String(value);
+  };
+
+  const formatCapitalizationChanges = (recipeId: string, changes: CapitalizationChange[]): React.ReactNode => {
+    const selectedIndices = selectedCapIndices.get(recipeId) || new Set<number>();
+
+    return changes.map((change, i) => {
+      let fieldLabel: string;
+      if (change.field === 'ingredient') {
+        const ingredientLabel = change.ingredientField === 'name' ? 'name' : 'prep notes';
+        fieldLabel = `Ingredient ${(change.ingredientIndex ?? 0) + 1} ${ingredientLabel}`;
+      } else {
+        fieldLabel =
+          change.field.charAt(0).toUpperCase() + change.field.slice(1).replace(/([A-Z])/g, ' $1');
+      }
+
+      return (
+        <div key={i} className={styles.capitalizationChange}>
+          <input
+            type="checkbox"
+            checked={selectedIndices.has(i)}
+            onChange={() => handleToggleCapChange(recipeId, i)}
+            className={styles.capChangeCheckbox}
+          />
+          <span className={styles.capitalizationField}>{fieldLabel}:</span>
+          <span className={styles.capitalizationOld}>{truncateText(change.oldValue, 30)}</span>
+          <span className={styles.capitalizationArrow}>→</span>
+          <span className={styles.capitalizationNew}>{truncateText(change.newValue, 30)}</span>
+        </div>
+      );
+    });
+  };
+
+  const truncateText = (text: string, maxLength: number): string => {
+    if (!text) return '';
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
   };
 
   const renderFieldSelection = () => (
@@ -302,18 +623,29 @@ export function ReprocessModal({
         </p>
 
         <div className={styles.fieldGrid}>
-          {(['nutrition', 'prepTimeMinutes', 'cookTimeMinutes', 'description'] as const).map(
-            (field) => (
-              <label key={field} className={styles.fieldCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={config.fields.includes(field)}
-                  onChange={() => handleFieldToggle(field)}
-                />
+          {(
+            [
+              'nutrition',
+              'prepTimeMinutes',
+              'cookTimeMinutes',
+              'description',
+              'capitalization',
+            ] as const
+          ).map((field) => (
+            <label key={field} className={styles.fieldCheckbox}>
+              <input
+                type="checkbox"
+                checked={config.fields.includes(field)}
+                onChange={() => handleFieldToggle(field)}
+              />
+              <div className={styles.fieldLabelContainer}>
                 <span className={styles.fieldLabel}>{FIELD_LABELS[field]}</span>
-              </label>
-            )
-          )}
+                {FIELD_DESCRIPTIONS[field] && (
+                  <span className={styles.fieldDescription}>{FIELD_DESCRIPTIONS[field]}</span>
+                )}
+              </div>
+            </label>
+          ))}
         </div>
 
         <div className={styles.hintSection}>
@@ -526,7 +858,10 @@ export function ReprocessModal({
                 >
                   <input
                     type="checkbox"
-                    checked={selectedChanges.get(result.recipeId) || false}
+                    checked={getRecipeSelectionState(result) === 'all'}
+                    ref={(el) => {
+                      if (el) el.indeterminate = getRecipeSelectionState(result) === 'partial';
+                    }}
                     onChange={() => handleToggleRecipeSelection(result.recipeId)}
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -545,18 +880,50 @@ export function ReprocessModal({
                   </span>
                 </div>
                 <div className={styles.changesList}>
-                  {result.proposedChanges.map((change, index) => (
-                    <div key={index} className={styles.changeItem}>
-                      <Check size={14} className={styles.changeIcon} />
-                      <span className={styles.changeField}>{FIELD_LABELS[change.field]}</span>
-                      <span className={styles.changeSource}>from {change.source}</span>
-                      <div className={styles.changeValue}>
-                        {formatFieldValue(change.field, change.newValue)}
+                  {result.proposedChanges.map((change, index) =>
+                    change.field === 'capitalization' && Array.isArray(change.newValue) ? (
+                      <div key={index} className={styles.changeItem}>
+                        <input
+                          type="checkbox"
+                          checked={getCapSelectionState(result.recipeId, change.newValue.length) === 'all'}
+                          ref={(el) => {
+                            if (el) el.indeterminate = getCapSelectionState(result.recipeId, change.newValue.length) === 'partial';
+                          }}
+                          onChange={() => handleToggleAllCapChanges(result.recipeId, change.newValue.length)}
+                          className={styles.changeCheckbox}
+                        />
+                        <Check size={14} className={styles.changeIcon} />
+                        <span className={styles.changeField}>{FIELD_LABELS[change.field]}</span>
+                        <span className={styles.changeSource}>local analysis</span>
+                        <div className={styles.capitalizationChanges}>
+                          {formatCapitalizationChanges(result.recipeId, change.newValue as CapitalizationChange[])}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ) : (
+                      <div key={index} className={styles.changeItem}>
+                        <input
+                          type="checkbox"
+                          checked={selectedChanges.get(result.recipeId)?.has(change.field) || false}
+                          onChange={() => handleToggleFieldSelection(result.recipeId, change.field)}
+                          className={styles.changeCheckbox}
+                        />
+                        <Check size={14} className={styles.changeIcon} />
+                        <span className={styles.changeField}>{FIELD_LABELS[change.field]}</span>
+                        <span className={styles.changeSource}>from {change.source}</span>
+                        <div className={styles.changeValue}>
+                          {formatFieldValue(change.field, change.newValue)}
+                        </div>
+                      </div>
+                    )
+                  )}
                   {result.extractedCookbook && (
                     <div className={styles.changeItem}>
+                      <input
+                        type="checkbox"
+                        checked={selectedExtracted.get(result.recipeId)?.has('cookbook') || false}
+                        onChange={() => handleToggleExtracted(result.recipeId, 'cookbook')}
+                        className={styles.changeCheckbox}
+                      />
                       <Check size={14} className={styles.changeIcon} />
                       <span className={styles.changeField}>Cookbook</span>
                       <span className={styles.changeSource}>from vision</span>
@@ -565,6 +932,12 @@ export function ReprocessModal({
                   )}
                   {result.extractedPageNumber && (
                     <div className={styles.changeItem}>
+                      <input
+                        type="checkbox"
+                        checked={selectedExtracted.get(result.recipeId)?.has('pageNumber') || false}
+                        onChange={() => handleToggleExtracted(result.recipeId, 'pageNumber')}
+                        className={styles.changeCheckbox}
+                      />
                       <Check size={14} className={styles.changeIcon} />
                       <span className={styles.changeField}>Page Number</span>
                       <span className={styles.changeSource}>from vision</span>

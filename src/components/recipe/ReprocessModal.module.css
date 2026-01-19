@@ -47,6 +47,18 @@
   color: var(--color-text-primary);
 }
 
+.fieldLabelContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fieldDescription {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
 .recipeCount {
   margin-top: var(--spacing-md);
   padding: var(--spacing-sm) var(--spacing-md);
@@ -56,6 +68,47 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   text-align: center;
+}
+
+/* Hint Section */
+.hintSection {
+  margin-top: var(--spacing-md);
+}
+
+.hintLabel {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.hintTextarea {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.hintTextarea::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.hintTextarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.hintDescription {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-xs);
 }
 
 /* Processing States */
@@ -290,6 +343,14 @@
   flex-shrink: 0;
 }
 
+.changeCheckbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  accent-color: var(--color-primary);
+}
+
 .changeIcon {
   flex-shrink: 0;
   color: #4ade80;
@@ -356,6 +417,57 @@
 
 .successIcon {
   color: var(--color-success, #4caf50);
+}
+
+/* Capitalization Changes */
+.capitalizationChanges {
+  width: 100%;
+  margin-top: var(--spacing-xs);
+  padding-left: calc(14px + var(--spacing-sm));
+}
+
+.capitalizationChange {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.capChangeCheckbox {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  accent-color: var(--color-primary);
+}
+
+.capitalizationChange:last-child {
+  border-bottom: none;
+}
+
+.capitalizationField {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  min-width: 100px;
+}
+
+.capitalizationOld {
+  color: #ef4444;
+  text-decoration: line-through;
+  font-family: var(--font-mono, monospace);
+}
+
+.capitalizationArrow {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+}
+
+.capitalizationNew {
+  color: #4ade80;
+  font-family: var(--font-mono, monospace);
 }
 
 /* Footer */
