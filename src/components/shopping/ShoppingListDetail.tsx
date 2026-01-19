@@ -60,7 +60,6 @@ export function ShoppingListDetail({
   onDelete,
   onNavigateToRecipe,
   onGroupItems,
-  onUngroupItem,
   onPartialUngroupItem,
 }: ShoppingListDetailProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);

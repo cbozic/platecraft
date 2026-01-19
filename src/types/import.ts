@@ -201,6 +201,7 @@ export function generateReprocessingVisionPrompt(
     prepTimeMinutes: 'Extract prep time in minutes if mentioned (number only)',
     cookTimeMinutes: 'Extract cook time in minutes if mentioned (number only)',
     description: 'Extract or generate a brief description of the recipe (1-2 sentences)',
+    capitalization: 'This field is handled locally and not extracted from images',
   };
 
   const instructions = missingFields.map((field) => fieldInstructions[field]).join('\n\n');

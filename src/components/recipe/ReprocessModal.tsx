@@ -880,26 +880,30 @@ export function ReprocessModal({
                   </span>
                 </div>
                 <div className={styles.changesList}>
-                  {result.proposedChanges.map((change, index) =>
-                    change.field === 'capitalization' && Array.isArray(change.newValue) ? (
-                      <div key={index} className={styles.changeItem}>
-                        <input
-                          type="checkbox"
-                          checked={getCapSelectionState(result.recipeId, change.newValue.length) === 'all'}
-                          ref={(el) => {
-                            if (el) el.indeterminate = getCapSelectionState(result.recipeId, change.newValue.length) === 'partial';
-                          }}
-                          onChange={() => handleToggleAllCapChanges(result.recipeId, change.newValue.length)}
-                          className={styles.changeCheckbox}
-                        />
-                        <Check size={14} className={styles.changeIcon} />
-                        <span className={styles.changeField}>{FIELD_LABELS[change.field]}</span>
-                        <span className={styles.changeSource}>local analysis</span>
-                        <div className={styles.capitalizationChanges}>
-                          {formatCapitalizationChanges(result.recipeId, change.newValue as CapitalizationChange[])}
+                  {result.proposedChanges.map((change, index) => {
+                    if (change.field === 'capitalization' && Array.isArray(change.newValue)) {
+                      const capChanges = change.newValue as CapitalizationChange[];
+                      return (
+                        <div key={index} className={styles.changeItem}>
+                          <input
+                            type="checkbox"
+                            checked={getCapSelectionState(result.recipeId, capChanges.length) === 'all'}
+                            ref={(el) => {
+                              if (el) el.indeterminate = getCapSelectionState(result.recipeId, capChanges.length) === 'partial';
+                            }}
+                            onChange={() => handleToggleAllCapChanges(result.recipeId, capChanges.length)}
+                            className={styles.changeCheckbox}
+                          />
+                          <Check size={14} className={styles.changeIcon} />
+                          <span className={styles.changeField}>{FIELD_LABELS[change.field]}</span>
+                          <span className={styles.changeSource}>local analysis</span>
+                          <div className={styles.capitalizationChanges}>
+                            {formatCapitalizationChanges(result.recipeId, capChanges)}
+                          </div>
                         </div>
-                      </div>
-                    ) : (
+                      );
+                    }
+                    return (
                       <div key={index} className={styles.changeItem}>
                         <input
                           type="checkbox"
@@ -914,8 +918,8 @@ export function ReprocessModal({
                           {formatFieldValue(change.field, change.newValue)}
                         </div>
                       </div>
-                    )
-                  )}
+                    );
+                  })}
                   {result.extractedCookbook && (
                     <div className={styles.changeItem}>
                       <input
