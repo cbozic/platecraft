@@ -54,6 +54,7 @@ export function ReprocessModal({
   const [selectedChanges, setSelectedChanges] = useState<Map<string, boolean>>(new Map());
   const [applyResult, setApplyResult] = useState<{ success: number; failed: number } | null>(null);
   const [isCancelled, setIsCancelled] = useState(false);
+  const [userHint, setUserHint] = useState('');
 
   const resetState = useCallback(() => {
     setStep('field-selection');
@@ -69,6 +70,7 @@ export function ReprocessModal({
     setSelectedChanges(new Map());
     setApplyResult(null);
     setIsCancelled(false);
+    setUserHint('');
   }, []);
 
   const handleClose = useCallback(() => {
@@ -108,11 +110,17 @@ export function ReprocessModal({
       const recipe = selectedRecipes[i];
       const blankFields = recipeReprocessingService.getBlankFields(recipe, config);
       const sourcePhotos = recipeReprocessingService.findSourcePhotos(recipe);
+      const hasNotes = recipe.notes && recipe.notes.trim().length > 0;
+      const hasHint = userHint && userHint.trim().length > 0;
+
+      // Process recipe if it has blank fields OR has notes/photos OR user provided a hint
+      const shouldProcess =
+        blankFields.length > 0 || hasNotes || sourcePhotos.length > 0 || hasHint;
 
       const result: RecipeReprocessingResult = {
         recipeId: recipe.id,
         recipeTitle: recipe.title,
-        status: blankFields.length > 0 ? 'pending' : 'skipped',
+        status: shouldProcess ? 'pending' : 'skipped',
         hasBlankFields: blankFields.length > 0,
         blankFields,
         proposedChanges: [],
@@ -121,7 +129,7 @@ export function ReprocessModal({
 
       scanResults.push(result);
 
-      if (blankFields.length > 0) {
+      if (shouldProcess) {
         recipesWithBlanks++;
         if (sourcePhotos.length > 0) {
           recipesWithPhotos++;
@@ -153,7 +161,7 @@ export function ReprocessModal({
     setStep('processing');
     setIsCancelled(false);
 
-    const recipesToProcess = results.filter((r) => r.hasBlankFields);
+    const recipesToProcess = results.filter((r) => r.status === 'pending');
     const updatedResults = [...results];
     let processedCount = 0;
     let changesCount = 0;
@@ -175,7 +183,7 @@ export function ReprocessModal({
         currentRecipe: { id: recipe.id, title: recipe.title },
       }));
 
-      const processedResult = await recipeReprocessingService.processRecipe(recipe, config);
+      const processedResult = await recipeReprocessingService.processRecipe(recipe, config, userHint);
 
       // Update the result in the array
       const index = updatedResults.findIndex((r) => r.recipeId === result.recipeId);
@@ -184,7 +192,11 @@ export function ReprocessModal({
       }
 
       processedCount++;
-      if (processedResult.proposedChanges.length > 0) {
+      const hasChanges =
+        processedResult.proposedChanges.length > 0 ||
+        processedResult.extractedCookbook ||
+        processedResult.extractedPageNumber;
+      if (hasChanges) {
         changesCount++;
         // Auto-select recipes with changes
         setSelectedChanges((prev) => new Map(prev).set(processedResult.recipeId, true));
@@ -239,12 +251,16 @@ export function ReprocessModal({
 
     for (const result of results) {
       const isSelected = selectedChanges.get(result.recipeId);
-      if (isSelected && result.proposedChanges.length > 0) {
+      const hasChanges =
+        result.proposedChanges.length > 0 ||
+        result.extractedCookbook ||
+        result.extractedPageNumber;
+      if (isSelected && hasChanges) {
         changesToApply.set(result.recipeId, result.proposedChanges);
       }
     }
 
-    const applyResultData = await recipeReprocessingService.applyChanges(changesToApply);
+    const applyResultData = await recipeReprocessingService.applyChanges(changesToApply, results);
     setApplyResult(applyResultData);
     setStep('complete');
   };
@@ -257,7 +273,9 @@ export function ReprocessModal({
     handleClose();
   };
 
-  const recipesWithChanges = results.filter((r) => r.proposedChanges.length > 0);
+  const recipesWithChanges = results.filter(
+    (r) => r.proposedChanges.length > 0 || r.extractedCookbook || r.extractedPageNumber
+  );
   const selectedCount = Array.from(selectedChanges.values()).filter(Boolean).length;
 
   const formatFieldValue = (field: ReprocessableField, value: unknown): string => {
@@ -279,7 +297,8 @@ export function ReprocessModal({
       <div className={styles.content}>
         <p className={styles.description}>
           Select which blank fields to check and attempt to fill in from notes or by re-analyzing
-          source photos.
+          source photos. You can also provide AI instructions below to guide the extraction
+          process. Cookbook and page information will be extracted automatically when available.
         </p>
 
         <div className={styles.fieldGrid}>
@@ -295,6 +314,20 @@ export function ReprocessModal({
               </label>
             )
           )}
+        </div>
+
+        <div className={styles.hintSection}>
+          <label className={styles.hintLabel}>AI Instructions (optional)</label>
+          <textarea
+            className={styles.hintTextarea}
+            value={userHint}
+            onChange={(e) => setUserHint(e.target.value)}
+            placeholder="e.g., This recipe came from the American Heart Association cookbook. Please extract nutrition info carefully."
+            rows={3}
+          />
+          <p className={styles.hintDescription}>
+            Provide context or instructions to guide AI when extracting data from source photos
+          </p>
         </div>
 
         <div className={styles.recipeCount}>
@@ -349,21 +382,28 @@ export function ReprocessModal({
   );
 
   const renderSummary = () => {
+    const recipesToProcess = results.filter((r) => r.status === 'pending');
     const recipesWithBlanks = results.filter((r) => r.hasBlankFields);
-    const recipesWithPhotos = recipesWithBlanks.filter((r) => r.hasSourcePhoto);
-    const recipesWithNotes = selectedRecipes.filter((r) => r.notes && r.notes.trim()).length;
+    const recipesWithPhotos = recipesToProcess.filter((r) => r.hasSourcePhoto);
+    const recipesWithNotes = recipesToProcess.filter((r) => {
+      const recipe = selectedRecipes.find((sr) => sr.id === r.recipeId);
+      return recipe?.notes && recipe.notes.trim().length > 0;
+    }).length;
+    const hasHint = userHint && userHint.trim().length > 0;
 
     return (
       <>
         <div className={styles.content}>
           <p className={styles.description}>
-            Found recipes with blank fields that may be recoverable.
+            Found {recipesToProcess.length} recipe{recipesToProcess.length !== 1 ? 's' : ''} to
+            process for data extraction.
+            {hasHint && ' AI instructions provided via hint.'}
           </p>
 
           <div className={styles.summaryStats}>
             <div className={styles.statCard}>
               <span className={styles.statValue}>{recipesWithBlanks.length}</span>
-              <span className={styles.statLabel}>Recipes with blanks</span>
+              <span className={styles.statLabel}>With blank fields</span>
             </div>
             <div className={styles.statCard}>
               <span className={styles.statValue}>{recipesWithPhotos.length}</span>
@@ -375,9 +415,9 @@ export function ReprocessModal({
             </div>
             <div className={styles.statCard}>
               <span className={styles.statValue}>
-                {selectedRecipes.length - recipesWithBlanks.length}
+                {selectedRecipes.length - recipesToProcess.length}
               </span>
-              <span className={styles.statLabel}>Already complete</span>
+              <span className={styles.statLabel}>Skipped</span>
             </div>
           </div>
 
@@ -387,6 +427,16 @@ export function ReprocessModal({
               <span>
                 {recipesWithPhotos.length} recipes may need Vision API calls. This could take a
                 while due to rate limiting.
+              </span>
+            </div>
+          )}
+
+          {hasHint && recipesWithPhotos.length === 0 && (
+            <div className={styles.warningBanner}>
+              <AlertTriangle size={16} />
+              <span>
+                AI instructions provided, but no recipes have source photos. Instructions will only
+                be used for recipes with source photos.
               </span>
             </div>
           )}
@@ -482,8 +532,16 @@ export function ReprocessModal({
                   />
                   <h4 className={styles.recipeTitle}>{result.recipeTitle}</h4>
                   <span className={styles.changeCount}>
-                    {result.proposedChanges.length} change
-                    {result.proposedChanges.length !== 1 ? 's' : ''}
+                    {result.proposedChanges.length +
+                      (result.extractedCookbook ? 1 : 0) +
+                      (result.extractedPageNumber ? 1 : 0)}{' '}
+                    change
+                    {result.proposedChanges.length +
+                      (result.extractedCookbook ? 1 : 0) +
+                      (result.extractedPageNumber ? 1 : 0) !==
+                    1
+                      ? 's'
+                      : ''}
                   </span>
                 </div>
                 <div className={styles.changesList}>
@@ -497,6 +555,22 @@ export function ReprocessModal({
                       </div>
                     </div>
                   ))}
+                  {result.extractedCookbook && (
+                    <div className={styles.changeItem}>
+                      <Check size={14} className={styles.changeIcon} />
+                      <span className={styles.changeField}>Cookbook</span>
+                      <span className={styles.changeSource}>from vision</span>
+                      <div className={styles.changeValue}>{result.extractedCookbook}</div>
+                    </div>
+                  )}
+                  {result.extractedPageNumber && (
+                    <div className={styles.changeItem}>
+                      <Check size={14} className={styles.changeIcon} />
+                      <span className={styles.changeField}>Page Number</span>
+                      <span className={styles.changeSource}>from vision</span>
+                      <div className={styles.changeValue}>{result.extractedPageNumber}</div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

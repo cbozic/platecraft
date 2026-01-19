@@ -30,6 +30,8 @@ export interface ParsedRecipe {
   sourceUrl?: string;
   tags?: string[];
   nutrition?: NutritionInfo;
+  referenceCookbook?: string;
+  referencePageNumber?: number;
 }
 
 /**
@@ -111,9 +113,24 @@ If the recipe is primarily printed text with handwritten annotations, modificati
 - Prefix handwritten content in notes with "Handwritten notes:" followed by the handwritten text
 - Handwritten additions might include recipe modifications, tips, corrections, ratings, dates, or personal comments
 
+COOKBOOK AND PAGE DETECTION:
+- Look for cookbook titles in the header, footer, or spine of the page
+- Look for page numbers anywhere on the page
+- If you can identify the cookbook name, include it in the "referenceCookbook" field
+- If you can identify the page number, include it in the "referencePageNumber" field
+
+RECIPE TITLE FORMATTING:
+- Use proper title case capitalization for the recipe title
+- Capitalize the first and last words, and all major words (nouns, verbs, adjectives, adverbs)
+- Keep articles (a, an, the), coordinating conjunctions (and, but, or), and short prepositions (in, on, at, to, for, with) lowercase unless they are the first or last word
+- Examples: "Chicken with Garlic and Herbs", "Grandma's Apple Pie", "Best Ever Chocolate Chip Cookies"
+- If the title is all uppercase or all lowercase, convert it to proper title case
+
+{USER_HINT}
+
 Return JSON in this exact format:
 {
-  "title": "Recipe Name",
+  "title": "Roasted Chicken with Garlic and Herbs",
   "description": "Brief description",
   "servings": 4,
   "prepTimeMinutes": 15,
@@ -130,7 +147,9 @@ Return JSON in this exact format:
     "fat": 8,
     "fiber": 4,
     "sodium": 400
-  }
+  },
+  "referenceCookbook": "The Joy of Cooking",
+  "referencePageNumber": 142
 }
 
 For ingredients:
@@ -154,9 +173,23 @@ Extract prep time and cook time if mentioned. If not found, omit those fields.
 If you cannot read part of the recipe clearly, make your best interpretation and note any uncertainty in the notes field.`;
 
 /**
+ * Build a vision prompt with an optional user hint
+ */
+export function buildVisionPromptWithHint(hint?: string): string {
+  const hintText = hint
+    ? `User hint: ${hint}\nPlease consider this hint when extracting cookbook/page information.\n\n`
+    : '';
+
+  return RECIPE_VISION_PROMPT.replace('{USER_HINT}', hintText);
+}
+
+/**
  * Generate a targeted prompt for reprocessing specific missing fields only
  */
-export function generateReprocessingVisionPrompt(missingFields: ReprocessableField[]): string {
+export function generateReprocessingVisionPrompt(
+  missingFields: ReprocessableField[],
+  hint?: string
+): string {
   const fieldInstructions: Record<ReprocessableField, string> = {
     nutrition: `Extract nutrition information if visible:
 - calories: total calories (number only)
@@ -188,10 +221,24 @@ export function generateReprocessingVisionPrompt(missingFields: ReprocessableFie
     exampleFields.push('"description": "A delicious recipe..."');
   }
 
+  // Always include cookbook/page in examples (extracted opportunistically)
+  exampleFields.push('"referenceCookbook": "The Joy of Cooking"');
+  exampleFields.push('"referencePageNumber": 142');
+
+  const hintText = hint
+    ? `\nUser instructions: ${hint}\nPlease follow these instructions when processing the recipe.\n`
+    : '';
+
   return `Look at this recipe image and extract ONLY the following specific information:
 
 ${instructions}
 
+ADDITIONALLY, always attempt to extract cookbook and page information:
+- Look for cookbook titles in the header, footer, or spine of the page
+- Look for page numbers anywhere on the page
+- Include "referenceCookbook" if you can identify the cookbook name
+- Include "referencePageNumber" if you can identify the page number
+${hintText}
 Return ONLY valid JSON with no markdown code blocks. Only include fields you can confidently extract:
 {
   ${exampleFields.join(',\n  ')}
@@ -240,6 +287,14 @@ export function parseReprocessingResponse(jsonString: string): ExtractedData | n
           sodium: typeof n.sodium === 'number' ? n.sodium : 0,
         };
       }
+    }
+
+    if (typeof parsed.referenceCookbook === 'string' && parsed.referenceCookbook.trim()) {
+      result.referenceCookbook = parsed.referenceCookbook.trim();
+    }
+
+    if (typeof parsed.referencePageNumber === 'number') {
+      result.referencePageNumber = parsed.referencePageNumber;
     }
 
     return Object.keys(result).length > 0 ? result : null;
@@ -313,6 +368,12 @@ export function parseClaudeResponse(jsonString: string): RecipeImportResult {
       sourceUrl: parsed.sourceUrl || undefined,
       tags: parsed.tags || undefined,
       nutrition,
+      referenceCookbook:
+        typeof parsed.referenceCookbook === 'string' && parsed.referenceCookbook.trim()
+          ? parsed.referenceCookbook.trim()
+          : undefined,
+      referencePageNumber:
+        typeof parsed.referencePageNumber === 'number' ? parsed.referencePageNumber : undefined,
     };
 
     return { success: true, recipe };

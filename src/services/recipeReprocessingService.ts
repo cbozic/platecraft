@@ -42,6 +42,12 @@ const PATTERNS = {
 
   // Sodium: "400mg sodium"
   sodium: /(?:sodium[:\s]+)?(\d+)\s*mg\s*(?:sodium)?/i,
+
+  // Cookbook: "Cookbook: American Heart Association", "Source: Joy of Cooking"
+  cookbook: /(?:cookbook|source|from)[:\s]+(.+?)(?:\s*(?:page|p\.?|pg\.?)\s*\d+|\s*$)/i,
+
+  // Page number: "page 142", "p. 142", "pg 142"
+  pageNumber: /(?:page|p\.?|pg\.?)\s*(\d+)/i,
 };
 
 export const recipeReprocessingService = {
@@ -130,6 +136,17 @@ export const recipeReprocessingService = {
       }
     }
 
+    // Always attempt to extract cookbook and page number (opportunistically)
+    const cookbookMatch = notes.match(PATTERNS.cookbook);
+    if (cookbookMatch && cookbookMatch[1]) {
+      extracted.referenceCookbook = cookbookMatch[1].trim();
+    }
+
+    const pageMatch = notes.match(PATTERNS.pageNumber);
+    if (pageMatch && pageMatch[1]) {
+      extracted.referencePageNumber = parseInt(pageMatch[1], 10);
+    }
+
     return extracted;
   },
 
@@ -164,7 +181,8 @@ export const recipeReprocessingService = {
    */
   async reanalyzeWithVision(
     sourcePhotos: RecipeImage[],
-    missingFields: ReprocessableField[]
+    missingFields: ReprocessableField[],
+    hint?: string
   ): Promise<ExtractedData | null> {
     const apiKey = await settingsRepository.getAnthropicApiKey();
 
@@ -226,8 +244,8 @@ export const recipeReprocessingService = {
         return null;
       }
 
-      // Add the targeted prompt
-      const prompt = generateReprocessingVisionPrompt(missingFields);
+      // Add the targeted prompt (with optional hint)
+      const prompt = generateReprocessingVisionPrompt(missingFields, hint);
       contentParts.push({
         type: 'text',
         text: prompt,
@@ -275,7 +293,8 @@ export const recipeReprocessingService = {
    */
   async processRecipe(
     recipe: Recipe,
-    config: ReprocessingConfig
+    config: ReprocessingConfig,
+    hint?: string
   ): Promise<RecipeReprocessingResult> {
     const result: RecipeReprocessingResult = {
       recipeId: recipe.id,
@@ -292,11 +311,6 @@ export const recipeReprocessingService = {
     result.blankFields = blankFields;
     result.hasBlankFields = blankFields.length > 0;
 
-    if (!result.hasBlankFields) {
-      result.status = 'skipped';
-      return result;
-    }
-
     // Check for source photos
     const sourcePhotos = this.findSourcePhotos(recipe);
     result.hasSourcePhoto = sourcePhotos.length > 0;
@@ -305,7 +319,7 @@ export const recipeReprocessingService = {
     let remainingFields = [...blankFields];
     const proposedChanges: FieldChange[] = [];
 
-    // Step 1: Try to extract from notes
+    // Step 1: Try to extract from notes (always, even if no blank fields)
     if (recipe.notes) {
       const notesData = this.extractFromNotes(recipe.notes, remainingFields);
 
@@ -321,11 +335,19 @@ export const recipeReprocessingService = {
           remainingFields = remainingFields.filter((f) => f !== field);
         }
       }
+
+      // Extract cookbook/page opportunistically from notes
+      if (notesData.referenceCookbook) {
+        result.extractedCookbook = notesData.referenceCookbook;
+      }
+      if (notesData.referencePageNumber) {
+        result.extractedPageNumber = notesData.referencePageNumber;
+      }
     }
 
     // Step 2: If fields remain and source photo exists, try vision
     if (remainingFields.length > 0 && sourcePhotos.length > 0) {
-      const visionData = await this.reanalyzeWithVision(sourcePhotos, remainingFields);
+      const visionData = await this.reanalyzeWithVision(sourcePhotos, remainingFields, hint);
 
       if (visionData) {
         for (const field of remainingFields) {
@@ -339,11 +361,21 @@ export const recipeReprocessingService = {
             });
           }
         }
+
+        // Extract cookbook/page opportunistically
+        if (visionData.referenceCookbook) {
+          result.extractedCookbook = visionData.referenceCookbook;
+        }
+        if (visionData.referencePageNumber) {
+          result.extractedPageNumber = visionData.referencePageNumber;
+        }
       }
     }
 
     result.proposedChanges = proposedChanges;
-    result.status = proposedChanges.length > 0 ? 'success' : 'skipped';
+    const hasExtractedData =
+      proposedChanges.length > 0 || result.extractedCookbook || result.extractedPageNumber;
+    result.status = hasExtractedData ? 'success' : 'skipped';
 
     return result;
   },
@@ -370,7 +402,8 @@ export const recipeReprocessingService = {
    * Apply approved changes to recipes
    */
   async applyChanges(
-    changes: ApprovedChanges
+    changes: ApprovedChanges,
+    results?: RecipeReprocessingResult[]
   ): Promise<{ success: number; failed: number }> {
     let success = 0;
     let failed = 0;
@@ -393,6 +426,19 @@ export const recipeReprocessingService = {
             case 'description':
               updates.description = change.newValue as string;
               break;
+          }
+        }
+
+        // Apply cookbook/page if extracted
+        if (results) {
+          const result = results.find((r) => r.recipeId === recipeId);
+          if (result) {
+            if (result.extractedCookbook) {
+              updates.referenceCookbook = result.extractedCookbook;
+            }
+            if (result.extractedPageNumber) {
+              updates.referencePageNumber = result.extractedPageNumber;
+            }
           }
         }
 

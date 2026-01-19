@@ -8,7 +8,7 @@ import { recipeRepository, settingsRepository, tagRepository } from '@/db';
 import { useImportStatePersistence, compressImageForStorage } from '@/hooks';
 import { useIOSInstallBanner } from '@/context/IOSInstallBannerContext';
 import type { ParsedRecipe, RecipeImage, Tag } from '@/types';
-import { RECIPE_VISION_PROMPT } from '@/types/import';
+import { buildVisionPromptWithHint } from '@/types/import';
 import styles from './PhotoImportTab.module.css';
 
 const PHOTO_IMPORT_TAGS_KEY = 'photoImportSelectedTags';
@@ -27,6 +27,7 @@ interface PersistedState {
   error: string | null;
   // Compressed thumbnails for display when resuming (not the full images)
   imageThumbnails: string[];
+  userHint?: string;
 }
 
 export function PhotoImportTab() {
@@ -57,6 +58,7 @@ export function PhotoImportTab() {
   const [useVisionMode, setUseVisionMode] = useState(false);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [userHint, setUserHint] = useState('');
 
   // Combine state for persistence
   const persistedState = useMemo((): PersistedState => ({
@@ -69,7 +71,8 @@ export function PhotoImportTab() {
     ocrQuality,
     error,
     imageThumbnails,
-  }), [step, extractedText, manualPrompt, manualResponse, manualVisionResponse, ocrConfidence, ocrQuality, error, imageThumbnails]);
+    userHint,
+  }), [step, extractedText, manualPrompt, manualResponse, manualVisionResponse, ocrConfidence, ocrQuality, error, imageThumbnails, userHint]);
 
   // Restore callback
   const handleRestoreState = useCallback((state: Partial<PersistedState>) => {
@@ -85,6 +88,7 @@ export function PhotoImportTab() {
       setImageThumbnails(state.imageThumbnails);
       setPreviewUrls(state.imageThumbnails); // Use thumbnails as previews when restoring
     }
+    if (state.userHint !== undefined) setUserHint(state.userHint);
 
     // Mark as restored if we're past the upload step
     if (state.step && state.step !== 'upload') {
@@ -287,7 +291,7 @@ export function PhotoImportTab() {
     if (apiAvailable) {
       // Use API vision mode - send all images for analysis
       setStep('vision-processing');
-      const result = await recipeImportService.parseWithVision(selectedFiles);
+      const result = await recipeImportService.parseWithVision(selectedFiles, userHint);
 
       if (result.success && result.recipe) {
         setParsedRecipe(result.recipe);
@@ -439,7 +443,7 @@ export function PhotoImportTab() {
 
     setStep('vision-processing');
     // Send all images for vision mode analysis
-    const result = await recipeImportService.parseWithVision(imageBlobs);
+    const result = await recipeImportService.parseWithVision(imageBlobs, userHint);
 
     if (result.success && result.recipe) {
       setParsedRecipe(result.recipe);
@@ -473,10 +477,12 @@ export function PhotoImportTab() {
   };
 
   const handleCopyVisionPrompt = async () => {
+    const promptWithHint = buildVisionPromptWithHint(userHint);
+
     // Try modern clipboard API first
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
-        await navigator.clipboard.writeText(RECIPE_VISION_PROMPT);
+        await navigator.clipboard.writeText(promptWithHint);
         setVisionPromptCopied(true);
         setTimeout(() => setVisionPromptCopied(false), 2000);
         return;
@@ -487,7 +493,7 @@ export function PhotoImportTab() {
 
     // Fallback for iOS Safari and older browsers
     const textArea = document.createElement('textarea');
-    textArea.value = RECIPE_VISION_PROMPT;
+    textArea.value = promptWithHint;
 
     textArea.style.top = '0';
     textArea.style.left = '0';
@@ -503,7 +509,7 @@ export function PhotoImportTab() {
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    textArea.setSelectionRange(0, RECIPE_VISION_PROMPT.length);
+    textArea.setSelectionRange(0, promptWithHint.length);
 
     try {
       const successful = document.execCommand('copy');
@@ -650,6 +656,7 @@ export function PhotoImportTab() {
     setVisionPromptCopied(false);
     setWasRestored(false);
     setImageThumbnails([]);
+    setUserHint('');
     clearPersistedState(); // Clear persisted state when starting over
     handleClearAllFiles();
   };
@@ -796,6 +803,20 @@ export function PhotoImportTab() {
             </div>
           </div>
         )}
+
+        <div className={styles.hintSection}>
+          <label className={styles.label}>Cookbook/Page Hint (optional)</label>
+          <textarea
+            className={styles.textarea}
+            value={userHint}
+            onChange={(e) => setUserHint(e.target.value)}
+            placeholder="e.g., The Joy of Cooking, page 142"
+            rows={2}
+          />
+          <p className={styles.hint}>
+            Provide context to help AI detect the cookbook name and page number.
+          </p>
+        </div>
 
         <div className={styles.actions}>
           <Button
@@ -1090,7 +1111,7 @@ export function PhotoImportTab() {
           </p>
 
           <div className={styles.promptBox}>
-            <pre className={styles.promptText}>{RECIPE_VISION_PROMPT}</pre>
+            <pre className={styles.promptText}>{buildVisionPromptWithHint(userHint)}</pre>
             <Button
               variant="outline"
               size="sm"
@@ -1184,6 +1205,13 @@ export function PhotoImportTab() {
               {parsedRecipe.prepTimeMinutes && <span>Prep: {parsedRecipe.prepTimeMinutes} min</span>}
               {parsedRecipe.cookTimeMinutes && <span>Cook: {parsedRecipe.cookTimeMinutes} min</span>}
             </div>
+
+            {(parsedRecipe.referenceCookbook || parsedRecipe.referencePageNumber) && (
+              <div className={styles.previewMeta}>
+                {parsedRecipe.referenceCookbook && <span>Cookbook: {parsedRecipe.referenceCookbook}</span>}
+                {parsedRecipe.referencePageNumber && <span>Page: {parsedRecipe.referencePageNumber}</span>}
+              </div>
+            )}
 
             <div className={styles.previewSectionContent}>
               <h5>Ingredients ({parsedRecipe.ingredients.length})</h5>

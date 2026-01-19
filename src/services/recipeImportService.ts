@@ -1,7 +1,7 @@
 import { settingsRepository } from '@/db';
 import type { ParsedRecipe, RecipeImportResult, MeasurementUnit, StoreSection, RecipeImage, NutritionInfo } from '@/types';
 import { UNIT_INFO } from '@/types/units';
-import { generateManualParsePrompt, parseClaudeResponse, RECIPE_VISION_PROMPT } from '@/types/import';
+import { generateManualParsePrompt, parseClaudeResponse, buildVisionPromptWithHint } from '@/types/import';
 import { imageService } from './imageService';
 
 // Valid store sections
@@ -134,7 +134,7 @@ export const recipeImportService = {
    * Parse a recipe directly from images using Claude Vision
    * Accepts multiple images which are all sent to Claude for analysis
    */
-  async parseWithVision(imageBlobs: Blob | Blob[]): Promise<RecipeImportResult> {
+  async parseWithVision(imageBlobs: Blob | Blob[], hint?: string): Promise<RecipeImportResult> {
     const apiKey = await settingsRepository.getAnthropicApiKey();
 
     if (!apiKey) {
@@ -180,10 +180,10 @@ export const recipeImportService = {
         });
       }
 
-      // Add the text prompt at the end
+      // Add the text prompt at the end (with optional hint)
       contentParts.push({
         type: 'text',
-        text: RECIPE_VISION_PROMPT,
+        text: buildVisionPromptWithHint(hint),
       });
 
       const response = await fetch(CLAUDE_API_URL, {
@@ -353,8 +353,8 @@ export const recipeImportService = {
       prepTimeMinutes: parsed.prepTimeMinutes || null,
       cookTimeMinutes: parsed.cookTimeMinutes || null,
       sourceUrl: parsed.sourceUrl || '',
-      referenceCookbook: '',
-      referencePageNumber: null,
+      referenceCookbook: parsed.referenceCookbook || '',
+      referencePageNumber: parsed.referencePageNumber || null,
       referenceOther: '',
       nutrition: parsed.nutrition || null,
       images: sourceImages && sourceImages.length > 0 ? sourceImages : undefined,

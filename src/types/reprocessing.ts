@@ -35,6 +35,9 @@ export interface RecipeReprocessingResult {
   proposedChanges: FieldChange[];
   hasSourcePhoto: boolean;
   error?: string;
+  // Opportunistically extracted fields (not part of reprocessable fields)
+  extractedCookbook?: string;
+  extractedPageNumber?: number;
 }
 
 // Stage of the overall reprocessing operation
@@ -56,6 +59,8 @@ export interface ExtractedData {
   prepTimeMinutes?: number;
   cookTimeMinutes?: number;
   description?: string;
+  referenceCookbook?: string;
+  referencePageNumber?: number;
 }
 
 // Map of recipe ID to approved changes
