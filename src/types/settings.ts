@@ -42,6 +42,7 @@ export interface UserSettings {
   // Backup tracking
   lastBackupDate?: string; // ISO-8601 date string of last export
   lastImportDate?: string; // ISO-8601 date string of last import
+  lastModifiedDate?: string; // ISO-8601 date string of last user data modification
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
