@@ -1,12 +1,13 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
-import { ArrowLeft, Plus, Printer, MoreVertical, Trash2, RotateCcw, Copy, Link as LinkIcon, Search, X } from 'lucide-react';
+import { ArrowLeft, Plus, Printer, MoreVertical, Trash2, RotateCcw, Copy, Link as LinkIcon, Search, X, Download } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { ShoppingItemRow } from './ShoppingItemRow';
 import { AddItemModal } from './AddItemModal';
 import { SelectionActionBar } from './SelectionActionBar';
 import { GroupingModal } from './GroupingModal';
 import { UngroupingModal } from './UngroupingModal';
+import { ExportModal } from './ExportModal';
 import type { ShoppingList, ShoppingItem, StoreSectionInfo } from '@/types';
 import styles from './ShoppingListDetail.module.css';
 
@@ -65,6 +66,7 @@ export function ShoppingListDetail({
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showChecked, setShowChecked] = useState(true);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   // Selection mode state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -272,6 +274,15 @@ export function ShoppingListDetail({
           </p>
         </div>
         <div className={styles.headerActions}>
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Download size={16} />}
+            onClick={() => setExportModalOpen(true)}
+            className="no-print"
+          >
+            Export
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -525,6 +536,12 @@ export function ShoppingListDetail({
         onClose={handleCloseUngroupModal}
         groupedItem={itemToUngroup}
         onConfirm={handleConfirmUngroup}
+      />
+
+      <ExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        list={list}
       />
     </div>
   );
