@@ -62,6 +62,7 @@ export const settingsRepository = {
     await this.update({
       mealSlots: [...settings.mealSlots, newSlot],
     });
+    await this.touchLastModified();
 
     return newSlot;
   },
@@ -72,6 +73,7 @@ export const settingsRepository = {
       slot.id === id ? { ...slot, name } : slot
     );
     await this.update({ mealSlots: updatedSlots });
+    await this.touchLastModified();
   },
 
   async removeMealSlot(id: string): Promise<void> {
@@ -82,6 +84,7 @@ export const settingsRepository = {
     }
     const updatedSlots = settings.mealSlots.filter((s) => s.id !== id);
     await this.update({ mealSlots: updatedSlots });
+    await this.touchLastModified();
   },
 
   async reorderMealSlots(orderedIds: string[]): Promise<void> {
@@ -92,6 +95,7 @@ export const settingsRepository = {
       return { ...slot, order: index };
     });
     await this.update({ mealSlots: updatedSlots });
+    await this.touchLastModified();
   },
 
   // Store sections
@@ -114,6 +118,7 @@ export const settingsRepository = {
     await this.update({
       storeSections: [...settings.storeSections, newSection],
     });
+    await this.touchLastModified();
 
     return newSection;
   },
@@ -124,6 +129,7 @@ export const settingsRepository = {
       section.id === id ? { ...section, name } : section
     );
     await this.update({ storeSections: updatedSections });
+    await this.touchLastModified();
   },
 
   async removeStoreSection(id: string): Promise<void> {
@@ -134,6 +140,7 @@ export const settingsRepository = {
     }
     const updatedSections = settings.storeSections.filter((s) => s.id !== id);
     await this.update({ storeSections: updatedSections });
+    await this.touchLastModified();
   },
 
   async reorderStoreSections(orderedIds: string[]): Promise<void> {
@@ -144,6 +151,7 @@ export const settingsRepository = {
       return { ...section, order: index };
     });
     await this.update({ storeSections: updatedSections });
+    await this.touchLastModified();
   },
 
   // Staple ingredients
@@ -165,6 +173,7 @@ export const settingsRepository = {
     await this.update({
       stapleIngredients: [...currentStaples, normalized],
     });
+    await this.touchLastModified();
   },
 
   async removeStapleIngredient(name: string): Promise<void> {
@@ -175,6 +184,7 @@ export const settingsRepository = {
     await this.update({
       stapleIngredients: currentStaples.filter((s) => s !== normalized),
     });
+    await this.touchLastModified();
   },
 
   async setStapleIngredients(ingredients: string[]): Promise<void> {
@@ -182,6 +192,7 @@ export const settingsRepository = {
       .map((name) => name.trim().toLowerCase())
       .filter(Boolean);
     await this.update({ stapleIngredients: normalized });
+    await this.touchLastModified();
   },
 
   // Staple exclusions
@@ -203,6 +214,7 @@ export const settingsRepository = {
     await this.update({
       stapleExclusions: [...currentExclusions, normalized],
     });
+    await this.touchLastModified();
   },
 
   async removeStapleExclusion(name: string): Promise<void> {
@@ -213,6 +225,7 @@ export const settingsRepository = {
     await this.update({
       stapleExclusions: currentExclusions.filter((s) => s !== normalized),
     });
+    await this.touchLastModified();
   },
 
   async setStapleExclusions(exclusions: string[]): Promise<void> {
@@ -220,11 +233,13 @@ export const settingsRepository = {
       .map((name) => name.trim().toLowerCase())
       .filter(Boolean);
     await this.update({ stapleExclusions: normalized });
+    await this.touchLastModified();
   },
 
   // Daily calorie goal
   async setDailyCalorieGoal(goal: number | undefined): Promise<void> {
     await this.update({ dailyCalorieGoal: goal });
+    await this.touchLastModified();
   },
 
   // Anthropic API key (encrypted at rest)
@@ -341,6 +356,20 @@ export const settingsRepository = {
   async getLastImportDate(): Promise<Date | undefined> {
     const settings = await this.get();
     return settings.lastImportDate ? new Date(settings.lastImportDate) : undefined;
+  },
+
+  // User data modification tracking
+  async setLastModifiedDate(date: Date): Promise<void> {
+    await this.update({ lastModifiedDate: date.toISOString() });
+  },
+
+  async getLastModifiedDate(): Promise<Date | undefined> {
+    const settings = await this.get();
+    return settings.lastModifiedDate ? new Date(settings.lastModifiedDate) : undefined;
+  },
+
+  async touchLastModified(): Promise<void> {
+    await this.setLastModifiedDate(new Date());
   },
 
   // Reset to defaults

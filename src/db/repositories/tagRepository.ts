@@ -1,6 +1,7 @@
 import { db } from '../database';
 import type { Tag } from '@/types';
 import { createTag } from '@/types/tags';
+import { settingsRepository } from './settingsRepository';
 
 export const tagRepository = {
   async getAll(): Promise<Tag[]> {
@@ -35,6 +36,7 @@ export const tagRepository = {
 
     const tag = createTag(name, color);
     await db.tags.add(tag);
+    await settingsRepository.touchLastModified();
     return tag;
   },
 
@@ -74,6 +76,7 @@ export const tagRepository = {
 
     // Update the tag (using id as primary key)
     await db.tags.update(tag.id, { name: newName, color: newColor });
+    await settingsRepository.touchLastModified();
   },
 
   async delete(name: string): Promise<void> {
@@ -99,6 +102,7 @@ export const tagRepository = {
 
     // Delete using id as primary key
     await db.tags.delete(tag.id);
+    await settingsRepository.touchLastModified();
   },
 
   async ensureExists(name: string, color?: string): Promise<Tag> {

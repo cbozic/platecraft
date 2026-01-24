@@ -713,6 +713,11 @@ export function SettingsPage() {
                     Last import: {new Date(settings.lastImportDate).toLocaleDateString()}
                   </p>
                 )}
+                {settings.lastModifiedDate && (
+                  <p className={styles.lastImportDate}>
+                    Last modified: {new Date(settings.lastModifiedDate).toLocaleDateString()}
+                  </p>
+                )}
               </div>
             )}
             <div className={styles.dataActions}>

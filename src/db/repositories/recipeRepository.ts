@@ -1,6 +1,7 @@
 import { db } from '../database';
 import type { Recipe, RecipeFormData, Ingredient } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { settingsRepository } from './settingsRepository';
 
 export const recipeRepository = {
   async getAll(): Promise<Recipe[]> {
@@ -75,6 +76,7 @@ export const recipeRepository = {
     };
 
     await db.recipes.add(recipe);
+    await settingsRepository.touchLastModified();
     return recipe;
   },
 
@@ -116,6 +118,7 @@ export const recipeRepository = {
       updates.images = formData.images;
 
     await db.recipes.update(id, updates);
+    await settingsRepository.touchLastModified();
   },
 
   async toggleFavorite(id: string): Promise<void> {
@@ -125,6 +128,7 @@ export const recipeRepository = {
         isFavorite: !recipe.isFavorite,
         updatedAt: new Date(),
       });
+      await settingsRepository.touchLastModified();
     }
   },
 
@@ -134,6 +138,7 @@ export const recipeRepository = {
     await db.plannedMeals.where('recipeId').equals(id).delete();
     // And recurring meals
     await db.recurringMeals.where('recipeId').equals(id).delete();
+    await settingsRepository.touchLastModified();
   },
 
   async bulkCreate(recipes: Recipe[]): Promise<void> {
