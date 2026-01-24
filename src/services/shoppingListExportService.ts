@@ -5,7 +5,7 @@ import { DEFAULT_STORE_SECTIONS } from '@/types/shopping';
 import type { ShoppingList, ShoppingItem, StoreSectionInfo } from '@/types/shopping';
 import type { MeasurementUnit } from '@/types/units';
 
-export type ExportFormat = 'markdown' | 'json' | 'csv';
+export type ExportFormat = 'text' | 'markdown' | 'json' | 'csv';
 
 export interface ExportOptions {
   format: ExportFormat;
@@ -22,7 +22,7 @@ export interface ExportResult {
 }
 
 const DEFAULT_OPTIONS: ExportOptions = {
-  format: 'markdown',
+  format: 'text',
   includeRecipeSources: true,
   includeNotes: true,
   includeCheckedItems: false,
@@ -105,6 +105,75 @@ function filterItems(items: ShoppingItem[], options: ExportOptions): ShoppingIte
     }
     return true;
   });
+}
+
+// ============================================================================
+// PLAIN TEXT EXPORT
+// ============================================================================
+
+/**
+ * Generate plain text export of a shopping list
+ * Simple bulleted list format for easy reading and copying
+ */
+function generateTextExport(list: ShoppingList, options: ExportOptions): string {
+  const lines: string[] = [];
+  const filteredItems = filterItems(list.items, options);
+
+  // Header
+  lines.push(list.name);
+  lines.push(`${format(new Date(list.dateRangeStart), 'MMM d')} - ${format(new Date(list.dateRangeEnd), 'MMM d, yyyy')}`);
+  lines.push('');
+
+  if (filteredItems.length === 0) {
+    lines.push('No items to display.');
+    return lines.join('\n');
+  }
+
+  if (options.groupBySection) {
+    const grouped = groupItemsBySection(filteredItems);
+    const sorted = sortSections(grouped);
+
+    for (const { section, items } of sorted) {
+      if (items.length === 0) continue;
+
+      lines.push(section.name.toUpperCase());
+
+      for (const item of items) {
+        lines.push(formatTextItem(item, options));
+      }
+      lines.push('');
+    }
+  } else {
+    const sortedItems = [...filteredItems].sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const item of sortedItems) {
+      lines.push(formatTextItem(item, options));
+    }
+  }
+
+  return lines.join('\n').trim();
+}
+
+/**
+ * Format a single item for plain text export
+ */
+function formatTextItem(item: ShoppingItem, options: ExportOptions): string {
+  const parts: string[] = [];
+
+  // Quantity and name
+  const qty = formatItemQuantity(item);
+  if (qty) {
+    parts.push(`• ${qty} ${item.name}`);
+  } else {
+    parts.push(`• ${item.name}`);
+  }
+
+  // Notes (inline)
+  if (options.includeNotes && item.notes) {
+    parts.push(`(${item.notes})`);
+  }
+
+  return parts.join(' ');
 }
 
 // ============================================================================
@@ -405,6 +474,8 @@ export const shoppingListExportService = {
     const mergedOptions = { ...DEFAULT_OPTIONS, ...options };
 
     switch (mergedOptions.format) {
+      case 'text':
+        return generateTextExport(list, mergedOptions);
       case 'markdown':
         return generateMarkdownExport(list, mergedOptions);
       case 'json':
@@ -412,7 +483,7 @@ export const shoppingListExportService = {
       case 'csv':
         return generateCsvExport(list, mergedOptions);
       default:
-        return generateMarkdownExport(list, mergedOptions);
+        return generateTextExport(list, mergedOptions);
     }
   },
 
@@ -421,6 +492,8 @@ export const shoppingListExportService = {
    */
   getFileExtension(format: ExportFormat): string {
     switch (format) {
+      case 'text':
+        return 'txt';
       case 'markdown':
         return 'md';
       case 'json':
@@ -437,6 +510,8 @@ export const shoppingListExportService = {
    */
   getMimeType(format: ExportFormat): string {
     switch (format) {
+      case 'text':
+        return 'text/plain';
       case 'markdown':
         return 'text/markdown';
       case 'json':

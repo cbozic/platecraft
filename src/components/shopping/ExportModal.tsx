@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Copy, FileText, FileJson, FileSpreadsheet, Check } from 'lucide-react';
+import { Download, Copy, FileText, FileJson, FileSpreadsheet, Check, List } from 'lucide-react';
 import { Modal, ModalFooter, Button } from '@/components/ui';
 import {
   shoppingListExportService,
@@ -24,9 +24,15 @@ interface FormatOption {
 
 const FORMAT_OPTIONS: FormatOption[] = [
   {
+    id: 'text',
+    label: 'Plain Text',
+    description: 'Simple bulleted list, easy to copy anywhere',
+    icon: <List size={20} />,
+  },
+  {
     id: 'markdown',
     label: 'Markdown',
-    description: 'Human-readable format, great for AI assistants',
+    description: 'Rich format with checkboxes, great for AI assistants',
     icon: <FileText size={20} />,
   },
   {
@@ -44,7 +50,7 @@ const FORMAT_OPTIONS: FormatOption[] = [
 ];
 
 export function ExportModal({ isOpen, onClose, list }: ExportModalProps) {
-  const [format, setFormat] = useState<ExportFormat>('markdown');
+  const [format, setFormat] = useState<ExportFormat>('text');
   const [includeRecipeSources, setIncludeRecipeSources] = useState(true);
   const [includeNotes, setIncludeNotes] = useState(true);
   const [includeCheckedItems, setIncludeCheckedItems] = useState(false);
@@ -108,15 +114,17 @@ export function ExportModal({ isOpen, onClose, list }: ExportModalProps) {
         <div className={styles.section}>
           <label className={styles.sectionLabel}>Options</label>
           <div className={styles.options}>
-            <label className={styles.checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={includeRecipeSources}
-                onChange={(e) => setIncludeRecipeSources(e.target.checked)}
-                className={styles.checkbox}
-              />
-              <span>Include recipe sources</span>
-            </label>
+            {(format === 'markdown' || format === 'json' || format === 'csv') && (
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={includeRecipeSources}
+                  onChange={(e) => setIncludeRecipeSources(e.target.checked)}
+                  className={styles.checkbox}
+                />
+                <span>Include recipe sources</span>
+              </label>
+            )}
 
             <label className={styles.checkboxLabel}>
               <input
