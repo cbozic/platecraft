@@ -260,9 +260,27 @@ export const icalService = {
   },
 
   /**
+   * Normalize a calendar URL (convert webcal:// to https://)
+   */
+  normalizeCalendarUrl(url: string): string {
+    // webcal:// is just a convention - the actual content is served over HTTPS
+    if (url.startsWith('webcal://')) {
+      return url.replace('webcal://', 'https://');
+    }
+    // Also handle webcals:// (secure webcal, though rare)
+    if (url.startsWith('webcals://')) {
+      return url.replace('webcals://', 'https://');
+    }
+    return url;
+  },
+
+  /**
    * Fetch and parse an iCal URL
    */
   async fetchIcalUrl(url: string, calendarId: string): Promise<ExternalEvent[]> {
+    // Normalize the URL (convert webcal:// to https://)
+    const normalizedUrl = this.normalizeCalendarUrl(url);
+
     let lastError: Error | null = null;
     let allForbidden = true;
     const FETCH_TIMEOUT = 10000; // 10 seconds per attempt
@@ -289,7 +307,7 @@ export const icalService = {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       for (const proxyFn of CORS_PROXIES) {
         try {
-          const proxyUrl = proxyFn(url);
+          const proxyUrl = proxyFn(normalizedUrl);
           const response = await fetchWithTimeout(proxyUrl);
 
           if (!response.ok) {
