@@ -265,6 +265,32 @@ export function useCalendar(options: UseCalendarOptions = {}) {
     []
   );
 
+  const addFreeTextMeal = useCallback(
+    async (
+      date: Date,
+      slotId: string,
+      freeText: string,
+      notes?: string,
+      extraItems?: MealExtraItem[]
+    ) => {
+      try {
+        const newMeal = await mealPlanRepository.addFreeTextMeal(
+          date,
+          slotId,
+          freeText,
+          notes,
+          extraItems
+        );
+        setMeals((prev) => [...prev, newMeal]);
+        return newMeal;
+      } catch (error) {
+        console.error('Failed to add free-text meal:', error);
+        throw error;
+      }
+    },
+    []
+  );
+
   const removeMeal = useCallback(async (mealId: string) => {
     try {
       await mealPlanRepository.removeMeal(mealId);
@@ -351,6 +377,7 @@ export function useCalendar(options: UseCalendarOptions = {}) {
 
     // Meal management
     addMeal,
+    addFreeTextMeal,
     removeMeal,
     updateMeal,
     moveMeal,

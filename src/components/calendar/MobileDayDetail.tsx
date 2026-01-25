@@ -1,8 +1,18 @@
 import { format } from 'date-fns';
-import { Plus, X, StickyNote } from 'lucide-react';
+import { Plus, X, StickyNote, Pencil } from 'lucide-react';
 import type { PlannedMeal, MealSlot, ExternalEvent } from '@/types';
 import { ExternalEventCard } from './ExternalEventCard';
 import styles from './MobileDayDetail.module.css';
+
+const isFreeTextMeal = (meal: PlannedMeal): boolean => {
+  return !meal.recipeId && !!meal.freeText;
+};
+
+const getMealTitle = (meal: PlannedMeal, recipesById: Map<string, { id: string; title: string }>): string => {
+  if (meal.freeText) return meal.freeText;
+  const recipe = meal.recipeId ? recipesById.get(meal.recipeId) : null;
+  return recipe?.title || 'Unknown Recipe';
+};
 
 interface MobileDayDetailProps {
   date: Date;
@@ -46,17 +56,19 @@ export function MobileDayDetail({
       <div className={styles.slots}>
         {sortedMealSlots.map((slot) => {
           const meal = getMealForSlot(slot.id);
-          const recipe = meal ? recipesById.get(meal.recipeId) : null;
+          const mealTitle = meal ? getMealTitle(meal, recipesById) : null;
+          const isFreeText = meal ? isFreeTextMeal(meal) : false;
 
           return (
             <div key={slot.id} className={styles.slot}>
               <span className={styles.slotName}>{slot.name}</span>
-              {meal && recipe ? (
+              {meal && mealTitle ? (
                 <div
-                  className={styles.mealCard}
+                  className={`${styles.mealCard} ${isFreeText ? styles.freeTextMealCard : ''}`}
                   onClick={() => onMealClick(meal)}
                 >
-                  <span className={styles.mealTitle}>{recipe.title}</span>
+                  {isFreeText && <Pencil size={14} className={styles.freeTextIndicator} />}
+                  <span className={styles.mealTitle}>{mealTitle}</span>
                   <div className={styles.mealActions}>
                     {hasNotesOrExtras(meal) && (
                       <StickyNote size={14} className={styles.notesIndicator} />

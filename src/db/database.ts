@@ -148,6 +148,21 @@ export class PlatecraftDatabase extends Dexie {
       settings: 'id',
       ingredientMappings: 'id, canonicalName, *variants',
     });
+
+    // Version 5: Add freeText index for free-text meals (meals without recipes)
+    this.version(5).stores({
+      recipes: 'id, title, *tags, isFavorite, createdAt, updatedAt',
+      tags: 'id, &name',
+      plannedMeals: 'id, date, slotId, recipeId, freeText, [date+slotId]',
+      dayNotes: 'id, date',
+      recurringMeals: 'id, recipeId, dayOfWeek, slotId',
+      shoppingLists: 'id, createdAt',
+      shoppingItems: 'id, shoppingListId, isChecked, storeSection',
+      externalCalendars: 'id, provider',
+      externalEvents: 'id, calendarId, [calendarId+startTime]',
+      settings: 'id',
+      ingredientMappings: 'id, canonicalName, *variants',
+    });
   }
 
   async initialize(): Promise<void> {

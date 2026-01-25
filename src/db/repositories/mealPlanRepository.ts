@@ -54,6 +54,27 @@ export const mealPlanRepository = {
     return meal;
   },
 
+  async addFreeTextMeal(
+    date: Date,
+    slotId: string,
+    freeText: string,
+    notes?: string,
+    extraItems?: MealExtraItem[]
+  ): Promise<PlannedMeal> {
+    const meal: PlannedMeal = {
+      id: uuidv4(),
+      date: format(date, 'yyyy-MM-dd'),
+      slotId,
+      freeText,
+      servings: 1, // Default servings for free-text meals
+      notes,
+      extraItems,
+    };
+    await db.plannedMeals.add(meal);
+    await settingsRepository.touchLastModified();
+    return meal;
+  },
+
   async updateMeal(id: string, updates: Partial<Omit<PlannedMeal, 'id'>>): Promise<void> {
     await db.plannedMeals.update(id, updates);
     await settingsRepository.touchLastModified();

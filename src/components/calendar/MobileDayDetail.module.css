@@ -112,3 +112,19 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* Free-text meal styles */
+.freeTextMealCard {
+  background-color: var(--color-surface-elevated);
+  border-left: 3px solid var(--color-text-muted);
+}
+
+.freeTextMealCard .mealTitle {
+  color: var(--color-text-secondary);
+}
+
+.freeTextIndicator {
+  color: var(--color-text-muted);
+  margin-right: var(--spacing-xs);
+  flex-shrink: 0;
+}

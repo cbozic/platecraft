@@ -30,7 +30,8 @@ export interface PlannedMeal {
   id: string;
   date: string; // ISO date string (YYYY-MM-DD)
   slotId: string;
-  recipeId: string;
+  recipeId?: string; // Optional: either recipeId OR freeText should be set
+  freeText?: string; // Optional: meal name for free-text meals (no recipe)
   servings: number; // Can differ from recipe's default servings
   notes?: string; // Free text reminders for this meal
   extraItems?: MealExtraItem[]; // Side dishes/extras to add to shopping list

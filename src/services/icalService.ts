@@ -370,8 +370,10 @@ export const icalService = {
     ];
 
     for (const meal of meals) {
-      const recipe = recipesById.get(meal.recipeId);
-      if (!recipe) continue;
+      // Get meal title from recipe or free-text
+      const recipe = meal.recipeId ? recipesById.get(meal.recipeId) : null;
+      const mealTitle = meal.freeText || recipe?.title;
+      if (!mealTitle) continue; // Skip if no title
 
       const slot = mealSlotsById.get(meal.slotId);
       const slotTimes = slot ? getMealSlotTimes(slot) : { startHour: 12, endHour: 13 };
@@ -384,10 +386,12 @@ export const icalService = {
 
       // Build description
       const descriptionParts: string[] = [];
-      if (recipe.description) {
+      if (recipe?.description) {
         descriptionParts.push(recipe.description);
       }
-      descriptionParts.push(`Servings: ${meal.servings}`);
+      if (recipe) {
+        descriptionParts.push(`Servings: ${meal.servings}`);
+      }
       if (meal.notes) {
         descriptionParts.push(`Notes: ${meal.notes}`);
       }
@@ -401,7 +405,7 @@ export const icalService = {
       lines.push(`DTSTAMP:${formatIcalDateTime(new Date())}`);
       lines.push(`DTSTART:${formatIcalDateTime(startDate)}`);
       lines.push(`DTEND:${formatIcalDateTime(endDate)}`);
-      lines.push(`SUMMARY:${encodeIcalText(`${slotName}: ${recipe.title}`)}`);
+      lines.push(`SUMMARY:${encodeIcalText(`${slotName}: ${mealTitle}`)}`);
 
       if (descriptionParts.length > 0) {
         lines.push(`DESCRIPTION:${encodeIcalText(descriptionParts.join('\\n'))}`);

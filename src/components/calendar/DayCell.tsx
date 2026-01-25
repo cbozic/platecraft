@@ -1,9 +1,19 @@
 import { useState } from 'react';
-import { Plus, X, GripVertical, StickyNote } from 'lucide-react';
+import { Plus, X, GripVertical, StickyNote, Pencil } from 'lucide-react';
 import { ExternalEventCard } from './ExternalEventCard';
 import type { CalendarDay } from '@/utils/calendar';
 import type { PlannedMeal, MealSlot, ExternalEvent } from '@/types';
 import styles from './DayCell.module.css';
+
+const isFreeTextMeal = (meal: PlannedMeal): boolean => {
+  return !meal.recipeId && !!meal.freeText;
+};
+
+const getMealTitle = (meal: PlannedMeal, recipesById: Map<string, { id: string; title: string }>): string => {
+  if (meal.freeText) return meal.freeText;
+  const recipe = meal.recipeId ? recipesById.get(meal.recipeId) : null;
+  return recipe?.title || 'Unknown Recipe';
+};
 
 const hasNotesOrExtras = (meal: PlannedMeal): boolean => {
   return !!(meal.notes || (meal.extraItems && meal.extraItems.length > 0));
@@ -128,14 +138,15 @@ export function DayCell({
       <div className={styles.meals}>
         {sortedMealSlots.map((slot) => {
           const meal = getMealForSlot(slot.id);
-          const recipe = meal ? recipesById.get(meal.recipeId) : null;
+          const mealTitle = meal ? getMealTitle(meal, recipesById) : null;
           const isDropTarget = dragOverSlot === slot.id;
+          const isFreeText = meal ? isFreeTextMeal(meal) : false;
 
           if (compact) {
             // In compact mode (month view), show meal labels with names
-            if (meal && recipe) {
+            if (meal && mealTitle) {
               const mealHasExtras = hasNotesOrExtras(meal);
-              const titleParts = [`${slot.name}: ${recipe.title}`];
+              const titleParts = [`${slot.name}: ${mealTitle}`];
               if (meal.notes) titleParts.push(`Notes: ${meal.notes}`);
               if (meal.extraItems?.length) {
                 titleParts.push(`Extras: ${meal.extraItems.map(e => e.name).join(', ')}`);
@@ -143,7 +154,7 @@ export function DayCell({
               return (
                 <div
                   key={slot.id}
-                  className={styles.mealLabel}
+                  className={`${styles.mealLabel} ${isFreeText ? styles.freeTextMeal : ''}`}
                   title={titleParts.join('\n')}
                   draggable={!!onMoveMeal}
                   onDragStart={(e) => handleDragStart(e, meal)}
@@ -153,8 +164,9 @@ export function DayCell({
                     onMealClick(meal);
                   }}
                 >
-                  <span className={styles.mealDot} />
-                  <span className={styles.mealName}>{recipe.title}</span>
+                  <span className={`${styles.mealDot} ${isFreeText ? styles.freeTextDot : ''}`} />
+                  <span className={styles.mealName}>{mealTitle}</span>
+                  {isFreeText && <Pencil size={10} className={styles.freeTextIndicator} />}
                   {mealHasExtras && <StickyNote size={10} className={styles.notesIndicator} />}
                 </div>
               );
@@ -173,9 +185,9 @@ export function DayCell({
               onDrop={(e) => handleDrop(e, slot.id)}
             >
               <span className={styles.slotName}>{slot.name}</span>
-              {meal && recipe ? (
+              {meal && mealTitle ? (
                 <div
-                  className={styles.mealCard}
+                  className={`${styles.mealCard} ${isFreeText ? styles.freeTextMealCard : ''}`}
                   draggable={!!onMoveMeal}
                   onDragStart={(e) => handleDragStart(e, meal)}
                   onDragEnd={handleDragEnd}
@@ -189,7 +201,12 @@ export function DayCell({
                       <GripVertical size={12} />
                     </span>
                   )}
-                  <span className={styles.mealTitle}>{recipe.title}</span>
+                  {isFreeText && (
+                    <span className={styles.freeTextIndicatorWeek}>
+                      <Pencil size={10} />
+                    </span>
+                  )}
+                  <span className={styles.mealTitle}>{mealTitle}</span>
                   {mealHasExtras && (
                     <span className={styles.notesIndicatorWeek} title={meal.notes || 'Has extras'}>
                       <StickyNote size={12} />

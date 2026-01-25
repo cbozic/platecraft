@@ -8,8 +8,10 @@ import type {
   MeasurementUnit,
   AlternateUnit,
   OriginalAmount,
+  PlannedMeal,
 } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { format } from 'date-fns';
 import { mealPlanRepository } from './mealPlanRepository';
 import { recipeRepository } from './recipeRepository';
 import { settingsRepository } from './settingsRepository';
@@ -184,8 +186,12 @@ export const shoppingRepository = {
     // Get all planned meals for the date range
     const meals = await mealPlanRepository.getMealsForDateRange(startDate, endDate);
 
+    // Separate recipe-based meals from free-text meals
+    const recipeMeals = meals.filter((m): m is PlannedMeal & { recipeId: string } => !!m.recipeId);
+    const freeTextMeals = meals.filter((m) => !m.recipeId && m.freeText);
+
     // Get all recipes for these meals
-    const recipeIds = [...new Set(meals.map((m) => m.recipeId))];
+    const recipeIds = [...new Set(recipeMeals.map((m) => m.recipeId))];
     const recipes = await recipeRepository.getByIds(recipeIds);
     const recipeMap = new Map(recipes.map((r) => [r.id, r]));
 
@@ -202,7 +208,7 @@ export const shoppingRepository = {
 
     const allIngredients: IngredientWithSource[] = [];
 
-    for (const meal of meals) {
+    for (const meal of recipeMeals) {
       const recipe = recipeMap.get(meal.recipeId);
       if (!recipe) continue;
 
@@ -482,6 +488,26 @@ export const shoppingRepository = {
       estimationNote: agg.estimationNote,
       originalAmounts: agg.originalAmounts.length > 0 ? agg.originalAmounts : undefined,
     }));
+
+    // Add free-text meal items (reminder to buy ingredients)
+    for (const meal of freeTextMeals) {
+      if (!meal.freeText) continue;
+      const [year, month, day] = meal.date.split('-').map(Number);
+      const mealDate = new Date(year, month - 1, day);
+      const formattedDate = format(mealDate, 'EEEE, MMM d');
+      items.push({
+        id: uuidv4(),
+        name: `Buy ingredients for ${meal.freeText} on ${formattedDate}`,
+        quantity: null,
+        unit: null,
+        storeSection: 'other',
+        isChecked: false,
+        sourceRecipeIds: [],
+        sourceRecipeDetails: [],
+        isManual: false,
+        isRecurring: false,
+      });
+    }
 
     // Add extra items (meal extras/side dishes)
     for (const extra of extraAggregated.values()) {

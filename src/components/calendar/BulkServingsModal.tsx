@@ -101,10 +101,11 @@ export function BulkServingsModal({
     fetchMeals();
   }, [isOpen, startDate, endDate]);
 
-  // Get unique recipes in the current range
+  // Get unique recipes in the current range (only recipe-based meals, not free-text)
   const recipesInRange = useMemo(() => {
     const recipeMap = new Map<string, { id: string; title: string; count: number }>();
     for (const meal of mealsInRange) {
+      if (!meal.recipeId) continue; // Skip free-text meals
       const recipe = recipesById.get(meal.recipeId);
       if (recipe) {
         const existing = recipeMap.get(meal.recipeId);
@@ -118,9 +119,10 @@ export function BulkServingsModal({
     return Array.from(recipeMap.values()).sort((a, b) => a.title.localeCompare(b.title));
   }, [mealsInRange, recipesById]);
 
-  // Filter meals based on selections
+  // Filter meals based on selections (only recipe-based meals can have servings adjusted)
   const filteredMeals = useMemo(() => {
     return mealsInRange.filter((meal) => {
+      if (!meal.recipeId) return false; // Skip free-text meals
       const matchesRecipe = allRecipesSelected || selectedRecipeIds.has(meal.recipeId);
       const matchesSlot = allSlotsSelected || selectedSlotIds.has(meal.slotId);
       return matchesRecipe && matchesSlot;

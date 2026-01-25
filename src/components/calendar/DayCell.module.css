@@ -108,6 +108,46 @@
   opacity: 0.8;
 }
 
+/* Free-text meal indicators */
+.freeTextMeal {
+  border-left: 2px solid var(--color-text-muted);
+  padding-left: 4px;
+}
+
+.freeTextDot {
+  background-color: var(--color-text-muted);
+}
+
+.freeTextIndicator {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+.freeTextMealCard {
+  background-color: var(--color-surface-elevated);
+  border-left: 3px solid var(--color-text-muted);
+}
+
+.freeTextMealCard .mealTitle {
+  color: var(--color-text-secondary);
+}
+
+.freeTextMealCard:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.freeTextMealCard:hover .mealTitle {
+  color: var(--color-text-primary);
+}
+
+.freeTextIndicatorWeek {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  margin-right: 2px;
+}
+
 .mealCount {
   margin-top: auto;
   font-size: var(--font-size-xs);

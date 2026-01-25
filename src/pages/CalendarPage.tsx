@@ -11,6 +11,7 @@ import {
   PrintRecipesView,
   MobileDayDetail,
   BulkServingsModal,
+  FreeTextMealEditModal,
 } from '@/components/calendar';
 import { MealPlanAssistantModal } from '@/components/mealPlanAssistant';
 import type { DayMeals } from '@/components/calendar/PrintRecipesView';
@@ -50,8 +51,10 @@ export function CalendarPage() {
     goToToday,
     goToDate,
     addMeal,
+    addFreeTextMeal,
     removeMeal,
     moveMeal,
+    updateMeal,
     refreshMeals,
   } = useCalendar();
 
@@ -72,6 +75,10 @@ export function CalendarPage() {
 
   // Bulk servings modal state
   const [bulkServingsOpen, setBulkServingsOpen] = useState(false);
+
+  // Free-text meal edit modal state
+  const [freeTextEditOpen, setFreeTextEditOpen] = useState(false);
+  const [editingFreeTextMeal, setEditingFreeTextMeal] = useState<PlannedMeal | null>(null);
 
   // Mobile day detail state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -122,14 +129,22 @@ export function CalendarPage() {
   }, [goToDate, setView, isMobile, view]);
 
   const handleMealClick = useCallback((meal: PlannedMeal) => {
+    // Check if it's a free-text meal (no recipeId)
+    if (!meal.recipeId && meal.freeText) {
+      setEditingFreeTextMeal(meal);
+      setFreeTextEditOpen(true);
+      return;
+    }
     // Navigate to the recipe detail page with calendar context
-    navigate(`/recipes/${meal.recipeId}`, {
-      state: {
-        from: 'calendar',
-        view,
-        date: currentDate.toISOString(),
-      },
-    });
+    if (meal.recipeId) {
+      navigate(`/recipes/${meal.recipeId}`, {
+        state: {
+          from: 'calendar',
+          view,
+          date: currentDate.toISOString(),
+        },
+      });
+    }
   }, [navigate, view, currentDate]);
 
   const handleAddMeal = useCallback((date: Date, slotId: string) => {
@@ -161,6 +176,24 @@ export function CalendarPage() {
     [addMeal, pickerDate, pickerSlotId]
   );
 
+  const handleFreeTextSelect = useCallback(
+    async (freeText: string, notes?: string, extraItems?: MealExtraItem[]) => {
+      await addFreeTextMeal(pickerDate, pickerSlotId, freeText, notes, extraItems);
+    },
+    [addFreeTextMeal, pickerDate, pickerSlotId]
+  );
+
+  const handleFreeTextMealUpdate = useCallback(
+    async (updates: { freeText?: string; notes?: string; extraItems?: MealExtraItem[] }) => {
+      if (editingFreeTextMeal) {
+        await updateMeal(editingFreeTextMeal.id, updates);
+        setFreeTextEditOpen(false);
+        setEditingFreeTextMeal(null);
+      }
+    },
+    [editingFreeTextMeal, updateMeal]
+  );
+
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
@@ -176,18 +209,19 @@ export function CalendarPage() {
           return;
         }
 
-        // Get unique recipe IDs and fetch full recipe data
-        const recipeIds = [...new Set(meals.map((m) => m.recipeId))];
+        // Get unique recipe IDs and fetch full recipe data (filter out free-text meals)
+        const recipeIds = [...new Set(meals.map((m) => m.recipeId).filter((id): id is string => !!id))];
         const recipes = await recipeRepository.getByIds(recipeIds);
         const recipesMap = new Map(recipes.map((r) => [r.id, r]));
 
         // Create slots map
         const slotsMap = new Map(mealSlots.map((s) => [s.id, s]));
 
-        // Group meals by date and sort
+        // Group meals by date and sort (only recipe-based meals for print recipes)
         const mealsByDay = new Map<string, DayMeals>();
 
         for (const meal of meals) {
+          if (!meal.recipeId) continue; // Skip free-text meals for print recipes
           const recipe = recipesMap.get(meal.recipeId);
           if (!recipe) continue;
 
@@ -435,6 +469,7 @@ export function CalendarPage() {
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onSelect={handleRecipeSelect}
+        onAddFreeText={handleFreeTextSelect}
         date={pickerDate}
         slotId={pickerSlotId}
         mealSlots={mealSlots}
@@ -477,6 +512,17 @@ export function CalendarPage() {
         onComplete={refreshMeals}
         mealSlots={mealSlots}
         recipesById={recipesById}
+      />
+
+      <FreeTextMealEditModal
+        isOpen={freeTextEditOpen}
+        onClose={() => {
+          setFreeTextEditOpen(false);
+          setEditingFreeTextMeal(null);
+        }}
+        onSave={handleFreeTextMealUpdate}
+        meal={editingFreeTextMeal}
+        mealSlots={mealSlots}
       />
     </div>
   );
