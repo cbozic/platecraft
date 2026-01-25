@@ -93,6 +93,7 @@ export interface SourceRecipeDetail {
   quantity: number | null;
   unit: MeasurementUnit | null;
   originalIngredientName: string;
+  plannedServings?: number;
 }
 
 // Stored ingredient equivalency mapping

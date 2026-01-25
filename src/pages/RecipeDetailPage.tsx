@@ -16,6 +16,7 @@ interface LocationState {
   searchParams?: string;
   viewMode?: 'grid' | 'table';
   listId?: string;
+  plannedServings?: number;
 }
 
 export function RecipeDetailPage() {
@@ -35,7 +36,7 @@ export function RecipeDetailPage() {
         const recipeData = await recipeRepository.getById(id);
         if (recipeData) {
           setRecipe(recipeData);
-          setScaledServings(recipeData.servings);
+          setScaledServings(state?.plannedServings ?? recipeData.servings);
           if (recipeData.tags.length > 0) {
             const tagData = await tagRepository.getByNames(recipeData.tags);
             setTags(tagData);
@@ -49,7 +50,7 @@ export function RecipeDetailPage() {
     };
 
     loadRecipe();
-  }, [id]);
+  }, [id, state?.plannedServings]);
 
   const handleDelete = async () => {
     if (!recipe) return;

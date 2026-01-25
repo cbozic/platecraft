@@ -142,6 +142,7 @@ export function CalendarPage() {
           from: 'calendar',
           view,
           date: currentDate.toISOString(),
+          plannedServings: meal.servings,
         },
       });
     }

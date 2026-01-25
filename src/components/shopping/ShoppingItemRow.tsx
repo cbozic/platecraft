@@ -10,7 +10,7 @@ interface ShoppingItemRowProps {
   onToggle: (id: string) => void;
   onUpdate: (id: string, updates: Partial<ShoppingItem>) => void;
   onDelete: (id: string) => void;
-  onNavigateToRecipe?: (recipeId: string) => void;
+  onNavigateToRecipe?: (recipeId: string, plannedServings?: number) => void;
   // Selection mode props
   isSelectionMode?: boolean;
   isSelected?: boolean;
@@ -287,7 +287,7 @@ export function ShoppingItemRow({
               key={`${source.recipeId}-${index}`}
               type="button"
               className={styles.recipeRow}
-              onClick={() => source.recipeId && onNavigateToRecipe?.(source.recipeId)}
+              onClick={() => source.recipeId && onNavigateToRecipe?.(source.recipeId, source.plannedServings)}
               disabled={!source.recipeId}
             >
               <span className={styles.recipeRowOriginalName}>

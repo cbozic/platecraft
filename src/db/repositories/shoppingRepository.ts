@@ -204,6 +204,7 @@ export const shoppingRepository = {
       storeSection: string;
       recipeId: string;
       recipeName: string;
+      plannedServings: number;
     }
 
     const allIngredients: IngredientWithSource[] = [];
@@ -227,6 +228,7 @@ export const shoppingRepository = {
           storeSection: ingredient.storeSection || 'other',
           recipeId: recipe.id,
           recipeName: recipe.title,
+          plannedServings: meal.servings,
         });
       }
     }
@@ -329,6 +331,7 @@ export const shoppingRepository = {
           quantity: ing.quantity,
           unit: ing.unit,
           originalIngredientName: ing.originalName,
+          plannedServings: ing.plannedServings,
         })
       );
 

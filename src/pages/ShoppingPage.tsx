@@ -114,9 +114,9 @@ export function ShoppingPage() {
 
   // Handler for navigating to a recipe from shopping list
   const handleNavigateToRecipe = useCallback(
-    (recipeId: string) => {
+    (recipeId: string, plannedServings?: number) => {
       navigate(`/recipes/${recipeId}`, {
-        state: { from: 'shopping', listId: selectedListId },
+        state: { from: 'shopping', listId: selectedListId, plannedServings },
       });
     },
     [navigate, selectedListId]

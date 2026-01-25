@@ -34,7 +34,7 @@ interface ShoppingListDetailProps {
   onClearChecked: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onNavigateToRecipe?: (recipeId: string) => void;
+  onNavigateToRecipe?: (recipeId: string, plannedServings?: number) => void;
   onGroupItems?: (
     itemIds: string[],
     canonicalName: string,
