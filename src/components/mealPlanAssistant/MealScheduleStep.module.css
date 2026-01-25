@@ -108,15 +108,15 @@
   color: var(--color-text-muted);
 }
 
-/* Active preset button style */
-.presetActive {
-  background-color: var(--color-primary-light, rgba(59, 130, 246, 0.15)) !important;
-  border-color: var(--color-primary) !important;
-  color: var(--color-primary) !important;
+/* Active preset button style - use higher specificity to override Button component */
+.presetActive.presetActive {
+  background-color: var(--color-primary-light, rgba(59, 130, 246, 0.15));
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
-.presetActive:hover {
-  background-color: var(--color-primary-light, rgba(59, 130, 246, 0.25)) !important;
+.presetActive.presetActive:hover {
+  background-color: rgba(59, 130, 246, 0.25);
 }
 
 /* Day Cards Grid */
