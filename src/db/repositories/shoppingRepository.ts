@@ -81,6 +81,7 @@ export const shoppingRepository = {
       updatedAt: now,
     };
     await db.shoppingLists.add(list);
+    await settingsRepository.touchLastModified();
     return list;
   },
 
@@ -92,10 +93,12 @@ export const shoppingRepository = {
       ...updates,
       updatedAt: new Date(),
     });
+    await settingsRepository.touchLastModified();
   },
 
   async deleteList(id: string): Promise<void> {
     await db.shoppingLists.delete(id);
+    await settingsRepository.touchLastModified();
   },
 
   // Shopping Items

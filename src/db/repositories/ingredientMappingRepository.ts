@@ -1,6 +1,7 @@
 import { db } from '../database';
 import type { IngredientMapping } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { settingsRepository } from './settingsRepository';
 
 export const ingredientMappingRepository = {
   async getAll(): Promise<IngredientMapping[]> {
@@ -42,6 +43,7 @@ export const ingredientMappingRepository = {
       isUserConfirmed,
     };
     await db.ingredientMappings.add(mapping);
+    await settingsRepository.touchLastModified();
     return mapping;
   },
 
@@ -58,6 +60,7 @@ export const ingredientMappingRepository = {
         variants: updatedVariants,
         updatedAt: new Date(),
       });
+      await settingsRepository.touchLastModified();
     }
   },
 
@@ -73,6 +76,7 @@ export const ingredientMappingRepository = {
       variants: updatedVariants,
       updatedAt: new Date(),
     });
+    await settingsRepository.touchLastModified();
   },
 
   async update(
@@ -89,10 +93,12 @@ export const ingredientMappingRepository = {
       variants: updates.variants?.map((v) => v.toLowerCase()),
       updatedAt: new Date(),
     });
+    await settingsRepository.touchLastModified();
   },
 
   async delete(id: string): Promise<void> {
     await db.ingredientMappings.delete(id);
+    await settingsRepository.touchLastModified();
   },
 
   async clearAll(): Promise<void> {

@@ -2,6 +2,7 @@ import { db } from '../database';
 import type { PlannedMeal, DayNote, RecurringMeal, MealExtraItem } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { settingsRepository } from './settingsRepository';
 
 export const mealPlanRepository = {
   // Planned Meals
@@ -49,15 +50,18 @@ export const mealPlanRepository = {
       extraItems,
     };
     await db.plannedMeals.add(meal);
+    await settingsRepository.touchLastModified();
     return meal;
   },
 
   async updateMeal(id: string, updates: Partial<Omit<PlannedMeal, 'id'>>): Promise<void> {
     await db.plannedMeals.update(id, updates);
+    await settingsRepository.touchLastModified();
   },
 
   async removeMeal(id: string): Promise<void> {
     await db.plannedMeals.delete(id);
+    await settingsRepository.touchLastModified();
   },
 
   async moveMeal(id: string, toDate: string, toSlotId: string): Promise<PlannedMeal | undefined> {
@@ -70,6 +74,7 @@ export const mealPlanRepository = {
       slotId: toSlotId,
     };
     await db.plannedMeals.put(updatedMeal);
+    await settingsRepository.touchLastModified();
     return updatedMeal;
   },
 
@@ -84,6 +89,9 @@ export const mealPlanRepository = {
     }));
 
     await db.plannedMeals.bulkAdd(newMeals);
+    if (newMeals.length > 0) {
+      await settingsRepository.touchLastModified();
+    }
   },
 
   // Day Notes
@@ -107,6 +115,7 @@ export const mealPlanRepository = {
 
     if (existing) {
       await db.dayNotes.update(existing.id, { content });
+      await settingsRepository.touchLastModified();
       return { ...existing, content };
     } else {
       const note: DayNote = {
@@ -115,6 +124,7 @@ export const mealPlanRepository = {
         content,
       };
       await db.dayNotes.add(note);
+      await settingsRepository.touchLastModified();
       return note;
     }
   },
@@ -122,6 +132,7 @@ export const mealPlanRepository = {
   async removeNoteForDate(date: Date): Promise<void> {
     const dateStr = format(date, 'yyyy-MM-dd');
     await db.dayNotes.where('date').equals(dateStr).delete();
+    await settingsRepository.touchLastModified();
   },
 
   // Recurring Meals
@@ -156,6 +167,7 @@ export const mealPlanRepository = {
       isActive: true,
     };
     await db.recurringMeals.add(meal);
+    await settingsRepository.touchLastModified();
     return meal;
   },
 
@@ -164,16 +176,19 @@ export const mealPlanRepository = {
     updates: Partial<Omit<RecurringMeal, 'id'>>
   ): Promise<void> {
     await db.recurringMeals.update(id, updates);
+    await settingsRepository.touchLastModified();
   },
 
   async removeRecurringMeal(id: string): Promise<void> {
     await db.recurringMeals.delete(id);
+    await settingsRepository.touchLastModified();
   },
 
   async toggleRecurringMeal(id: string): Promise<void> {
     const meal = await db.recurringMeals.get(id);
     if (meal) {
       await db.recurringMeals.update(id, { isActive: !meal.isActive });
+      await settingsRepository.touchLastModified();
     }
   },
 
