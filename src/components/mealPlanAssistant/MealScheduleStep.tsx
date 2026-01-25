@@ -57,6 +57,53 @@ const MEAL_SCHEDULE_PRESETS: { id: MealSchedulePreset; label: string; descriptio
   { id: 'weekend-lunches', label: 'Weekend Lunches', description: 'Lunch on Sat & Sun only' },
 ];
 
+// Tag preset definitions for checking active state
+interface TagPresetConfig {
+  id: string;
+  label: string;
+  title: string;
+  tagPatterns: string[][];
+  excludePatterns: string[];
+  days: number[];
+  slotId: string;
+}
+
+const TAG_PRESETS: TagPresetConfig[] = [
+  {
+    id: 'quick-tuesdays',
+    label: 'Quick Tuesdays',
+    title: 'Add Meal Prep Friendly & Quick Prep tags to Tuesday dinners',
+    tagPatterns: [
+      ['meal prep', 'meal-prep'],
+      ['quick prep', 'quick', 'fast', '30 minute', '30-minute'],
+    ],
+    excludePatterns: ['breakfast'],
+    days: [2],
+    slotId: 'dinner',
+  },
+  {
+    id: 'slow-cook-tue-thu',
+    label: 'Slow Cook Tue/Thu',
+    title: 'Add Slow Cooker & Instant Pot tags to Tuesday & Thursday dinners',
+    tagPatterns: [
+      ['slow cooker', 'crockpot', 'crock pot'],
+      ['instant pot', 'instantpot'],
+    ],
+    excludePatterns: ['breakfast'],
+    days: [2, 4],
+    slotId: 'dinner',
+  },
+  {
+    id: 'make-ahead-sundays',
+    label: 'Make Ahead Sundays',
+    title: 'Add Make Ahead tag to Sunday dinners',
+    tagPatterns: [['make ahead', 'meal prep', 'freezer']],
+    excludePatterns: [],
+    days: [0],
+    slotId: 'dinner',
+  },
+];
+
 export function MealScheduleStep({
   startDate,
   endDate,
@@ -131,6 +178,104 @@ export function MealScheduleStep({
     }
     return 'custom';
   }, [startDate, endDate, isCustomMode]);
+
+  // Check which meal presets are currently active based on weekday configs
+  const activeMealPresets = useMemo((): Set<MealSchedulePreset> => {
+    const active = new Set<MealSchedulePreset>();
+
+    // Check dinner-only: all days have dinner enabled
+    const allDinnersEnabled = weekdayConfigs.every((dc) =>
+      dc.slots.some((s) => s.slotId === 'dinner' && s.isEnabled)
+    );
+    if (allDinnersEnabled) {
+      active.add('dinner-only');
+    }
+
+    // Check lunch-dinner: all days have both lunch and dinner enabled
+    const allLunchAndDinnerEnabled = weekdayConfigs.every((dc) => {
+      const lunchEnabled = dc.slots.some((s) => s.slotId === 'lunch' && s.isEnabled);
+      const dinnerEnabled = dc.slots.some((s) => s.slotId === 'dinner' && s.isEnabled);
+      return lunchEnabled && dinnerEnabled;
+    });
+    if (allLunchAndDinnerEnabled) {
+      active.add('lunch-dinner');
+    }
+
+    // Check weekday-dinners: weekdays (1-5) have dinner enabled
+    const weekdays = [1, 2, 3, 4, 5];
+    const weekdayDinnersEnabled = weekdays.every((day) => {
+      const dayConfig = weekdayConfigs.find((dc) => dc.dayOfWeek === day);
+      return dayConfig?.slots.some((s) => s.slotId === 'dinner' && s.isEnabled);
+    });
+    if (weekdayDinnersEnabled) {
+      active.add('weekday-dinners');
+    }
+
+    // Check weekend-lunches: weekend days (0, 6) have lunch enabled
+    const weekendDays = [0, 6];
+    const weekendLunchesEnabled = weekendDays.every((day) => {
+      const dayConfig = weekdayConfigs.find((dc) => dc.dayOfWeek === day);
+      return dayConfig?.slots.some((s) => s.slotId === 'lunch' && s.isEnabled);
+    });
+    if (weekendLunchesEnabled) {
+      active.add('weekend-lunches');
+    }
+
+    return active;
+  }, [weekdayConfigs]);
+
+  // Check which tag presets are currently active based on tags in weekday configs
+  const activeTagPresets = useMemo((): Set<string> => {
+    const active = new Set<string>();
+
+    // Helper to check if a tag matches any pattern in the list
+    const tagMatchesPatterns = (tagName: string, patterns: string[], excludePatterns: string[] = []): boolean => {
+      const tagLower = tagName.toLowerCase();
+      const hasExclusion = excludePatterns.some((p) => tagLower.includes(p.toLowerCase()));
+      if (hasExclusion) return false;
+      return patterns.some((p) => tagLower.includes(p.toLowerCase()));
+    };
+
+    // Helper to find all tags that match a pattern group
+    const findMatchingTags = (tagPatterns: string[][], excludePatterns: string[]): string[] => {
+      const matches: string[] = [];
+      for (const patterns of tagPatterns) {
+        const matchingTag = availableTags.find((t) =>
+          tagMatchesPatterns(t.name, patterns, excludePatterns)
+        );
+        if (matchingTag) {
+          matches.push(matchingTag.name.toLowerCase());
+        }
+      }
+      return matches;
+    };
+
+    for (const preset of TAG_PRESETS) {
+      // Find which tags this preset would add
+      const expectedTags = findMatchingTags(preset.tagPatterns, preset.excludePatterns);
+
+      if (expectedTags.length === 0) continue;
+
+      // Check if all required days have all expected tags on the specified slot
+      const allDaysHaveTags = preset.days.every((dayOfWeek) => {
+        const dayConfig = weekdayConfigs.find((dc) => dc.dayOfWeek === dayOfWeek);
+        const slotConfig = dayConfig?.slots.find((s) => s.slotId === preset.slotId);
+
+        if (!slotConfig?.isEnabled || !slotConfig.tagConfig) {
+          return false;
+        }
+
+        const currentTags = slotConfig.tagConfig.tags.map((t) => t.toLowerCase());
+        return expectedTags.every((expectedTag) => currentTags.includes(expectedTag));
+      });
+
+      if (allDaysHaveTags) {
+        active.add(preset.id);
+      }
+    }
+
+    return active;
+  }, [weekdayConfigs, availableTags]);
 
   const handleQuickRangeSelect = (range: QuickRange) => {
     const today = new Date();
@@ -374,6 +519,7 @@ export function MealScheduleStep({
               size="sm"
               onClick={() => onApplyPreset(preset.id)}
               title={preset.description}
+              className={activeMealPresets.has(preset.id) ? styles.presetActive : undefined}
             >
               {preset.label}
             </Button>
@@ -392,50 +538,20 @@ export function MealScheduleStep({
         {/* Tag Presets */}
         <div className={styles.presets}>
           <span className={styles.presetsLabel}>Tags:</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              applyTagPreset(
-                [
-                  ['meal prep', 'meal-prep'],
-                  ['quick prep', 'quick', 'fast', '30 minute', '30-minute'],
-                ],
-                [2],
-                'dinner',
-                ['breakfast']
-              )
-            }
-            title="Add Meal Prep Friendly & Quick Prep tags to Tuesday dinners"
-          >
-            Quick Tuesdays
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              applyTagPreset(
-                [
-                  ['slow cooker', 'crockpot', 'crock pot'],
-                  ['instant pot', 'instantpot'],
-                ],
-                [2, 4],
-                'dinner',
-                ['breakfast']
-              )
-            }
-            title="Add Slow Cooker & Instant Pot tags to Tuesday & Thursday dinners"
-          >
-            Slow Cook Tue/Thu
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => applyTagPreset([['make ahead', 'meal prep', 'freezer']], [0])}
-            title="Add Make Ahead tag to Sunday dinners"
-          >
-            Make Ahead Sundays
-          </Button>
+          {TAG_PRESETS.map((preset) => (
+            <Button
+              key={preset.id}
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                applyTagPreset(preset.tagPatterns, preset.days, preset.slotId, preset.excludePatterns)
+              }
+              title={preset.title}
+              className={activeTagPresets.has(preset.id) ? styles.presetActive : undefined}
+            >
+              {preset.label}
+            </Button>
+          ))}
         </div>
 
         {/* Day Cards Grid */}
