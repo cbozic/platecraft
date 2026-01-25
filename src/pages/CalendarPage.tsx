@@ -301,22 +301,6 @@ export function CalendarPage() {
       <div className={styles.header}>
         <h1 className={styles.title}>Meal Calendar</h1>
         <div className={styles.headerActions}>
-          <div className={styles.viewToggle}>
-            <Button
-              variant={view === 'month' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => setView('month')}
-            >
-              Month
-            </Button>
-            <Button
-              variant={view === 'week' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => setView('week')}
-            >
-              Week
-            </Button>
-          </div>
           <Button
             variant="outline"
             size="sm"
@@ -374,10 +358,26 @@ export function CalendarPage() {
           <Button variant="ghost" onClick={goToNext} aria-label="Next">
             <ChevronRight size={20} />
           </Button>
+          <Button variant="outline" size="sm" onClick={goToToday}>
+            Go to Today
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={goToToday}>
-          Today
-        </Button>
+        <div className={styles.viewToggle}>
+          <Button
+            variant={view === 'month' ? 'primary' : 'outline'}
+            size="sm"
+            onClick={() => setView('month')}
+          >
+            View Month
+          </Button>
+          <Button
+            variant={view === 'week' ? 'primary' : 'outline'}
+            size="sm"
+            onClick={() => setView('week')}
+          >
+            View Week
+          </Button>
+        </div>
       </div>
 
       <div className={styles.calendarContainer}>

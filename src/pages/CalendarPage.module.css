@@ -96,10 +96,6 @@
     width: 100%;
   }
 
-  .viewToggle {
-    order: -1;
-  }
-
   .toolbar {
     margin-bottom: var(--spacing-md);
   }
