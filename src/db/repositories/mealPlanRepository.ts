@@ -230,4 +230,16 @@ export const mealPlanRepository = {
     await db.dayNotes.clear();
     await db.recurringMeals.clear();
   },
+
+  async bulkUpdateMeals(
+    mealIds: string[],
+    updates: Partial<Omit<PlannedMeal, 'id'>>
+  ): Promise<number> {
+    const meals = await db.plannedMeals.bulkGet(mealIds);
+    const updatedMeals = meals
+      .filter((m): m is PlannedMeal => m !== undefined)
+      .map(meal => ({ ...meal, ...updates }));
+    await db.plannedMeals.bulkPut(updatedMeals);
+    return updatedMeals.length;
+  },
 };

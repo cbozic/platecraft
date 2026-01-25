@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, addDays, addMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { Calendar } from 'lucide-react';
 import { Modal, ModalFooter, Button, Input } from '@/components/ui';
 import styles from './PrintRecipesDatePicker.module.css';
@@ -10,7 +10,7 @@ interface PrintRecipesDatePickerProps {
   onPrint: (startDate: Date, endDate: Date) => void;
 }
 
-type QuickRange = 'today' | 'tomorrow' | 'this-week' | 'next-week' | 'this-month' | 'next-7-days' | 'custom';
+type QuickRange = 'today' | 'tomorrow' | 'this-week' | 'next-week' | 'this-month' | 'next-month' | 'next-7-days' | 'custom';
 
 const QUICK_RANGES: { id: QuickRange; label: string }[] = [
   { id: 'today', label: 'Today' },
@@ -19,6 +19,7 @@ const QUICK_RANGES: { id: QuickRange; label: string }[] = [
   { id: 'next-week', label: 'Next Week' },
   { id: 'next-7-days', label: 'Next 7 Days' },
   { id: 'this-month', label: 'This Month' },
+  { id: 'next-month', label: 'Next Month' },
   { id: 'custom', label: 'Custom Range' },
 ];
 
@@ -57,6 +58,12 @@ export function PrintRecipesDatePicker({
         return {
           startDate: startOfMonth(today),
           endDate: endOfMonth(today),
+        };
+      case 'next-month':
+        const nextMonth = addMonths(today, 1);
+        return {
+          startDate: startOfMonth(nextMonth),
+          endDate: endOfMonth(nextMonth),
         };
       case 'custom':
         return {

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Printer, Download, BookOpen, Wand2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Printer, Download, BookOpen, Wand2, Users } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { Button } from '@/components/ui';
 import {
@@ -10,6 +10,7 @@ import {
   PrintRecipesDatePicker,
   PrintRecipesView,
   MobileDayDetail,
+  BulkServingsModal,
 } from '@/components/calendar';
 import { MealPlanAssistantModal } from '@/components/mealPlanAssistant';
 import type { DayMeals } from '@/components/calendar/PrintRecipesView';
@@ -51,6 +52,7 @@ export function CalendarPage() {
     addMeal,
     removeMeal,
     moveMeal,
+    refreshMeals,
   } = useCalendar();
 
   // Recipe picker state
@@ -67,6 +69,9 @@ export function CalendarPage() {
   const [planAssistantOpen, setPlanAssistantOpen] = useState(false);
   const [resumingPlan, setResumingPlan] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
+
+  // Bulk servings modal state
+  const [bulkServingsOpen, setBulkServingsOpen] = useState(false);
 
   // Mobile day detail state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -324,6 +329,15 @@ export function CalendarPage() {
           <Button
             variant="outline"
             size="sm"
+            leftIcon={<Users size={16} />}
+            onClick={() => setBulkServingsOpen(true)}
+            className="no-print"
+          >
+            Adjust Servings
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             leftIcon={<Download size={16} />}
             onClick={handleExport}
             className="no-print"
@@ -455,6 +469,14 @@ export function CalendarPage() {
         weekStartsOn={weekStartsOn}
         defaultServings={defaultServings}
         resumePlan={resumingPlan}
+      />
+
+      <BulkServingsModal
+        isOpen={bulkServingsOpen}
+        onClose={() => setBulkServingsOpen(false)}
+        onComplete={refreshMeals}
+        mealSlots={mealSlots}
+        recipesById={recipesById}
       />
     </div>
   );
