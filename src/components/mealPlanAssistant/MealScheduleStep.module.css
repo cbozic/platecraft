@@ -108,6 +108,17 @@
   color: var(--color-text-muted);
 }
 
+/* Active preset button style */
+.presetActive {
+  background-color: var(--color-primary-light, rgba(59, 130, 246, 0.15)) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+}
+
+.presetActive:hover {
+  background-color: var(--color-primary-light, rgba(59, 130, 246, 0.25)) !important;
+}
+
 /* Day Cards Grid */
 .dayCardsGrid {
   display: grid;
