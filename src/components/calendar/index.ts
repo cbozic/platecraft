@@ -9,3 +9,4 @@ export { PrintRecipesView } from './PrintRecipesView';
 export { MobileDayDetail } from './MobileDayDetail';
 export { BulkServingsModal } from './BulkServingsModal';
 export { FreeTextMealEditModal } from './FreeTextMealEditModal';
+export { RecipeMealEditModal } from './RecipeMealEditModal';

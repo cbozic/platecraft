@@ -12,6 +12,7 @@ import {
   MobileDayDetail,
   BulkServingsModal,
   FreeTextMealEditModal,
+  RecipeMealEditModal,
 } from '@/components/calendar';
 import { MealPlanAssistantModal } from '@/components/mealPlanAssistant';
 import type { DayMeals } from '@/components/calendar/PrintRecipesView';
@@ -80,6 +81,10 @@ export function CalendarPage() {
   const [freeTextEditOpen, setFreeTextEditOpen] = useState(false);
   const [editingFreeTextMeal, setEditingFreeTextMeal] = useState<PlannedMeal | null>(null);
 
+  // Recipe meal edit modal state
+  const [recipeMealEditOpen, setRecipeMealEditOpen] = useState(false);
+  const [editingRecipeMeal, setEditingRecipeMeal] = useState<PlannedMeal | null>(null);
+
   // Mobile day detail state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
@@ -135,18 +140,12 @@ export function CalendarPage() {
       setFreeTextEditOpen(true);
       return;
     }
-    // Navigate to the recipe detail page with calendar context
+    // Open edit modal for recipe meals
     if (meal.recipeId) {
-      navigate(`/recipes/${meal.recipeId}`, {
-        state: {
-          from: 'calendar',
-          view,
-          date: currentDate.toISOString(),
-          plannedServings: meal.servings,
-        },
-      });
+      setEditingRecipeMeal(meal);
+      setRecipeMealEditOpen(true);
     }
-  }, [navigate, view, currentDate]);
+  }, []);
 
   const handleAddMeal = useCallback((date: Date, slotId: string) => {
     setPickerDate(date);
@@ -194,6 +193,32 @@ export function CalendarPage() {
     },
     [editingFreeTextMeal, updateMeal]
   );
+
+  const handleRecipeMealUpdate = useCallback(
+    async (updates: { servings?: number; notes?: string; extraItems?: MealExtraItem[] }) => {
+      if (editingRecipeMeal) {
+        await updateMeal(editingRecipeMeal.id, updates);
+        setRecipeMealEditOpen(false);
+        setEditingRecipeMeal(null);
+      }
+    },
+    [editingRecipeMeal, updateMeal]
+  );
+
+  const handleViewRecipeFromModal = useCallback(() => {
+    if (editingRecipeMeal?.recipeId) {
+      setRecipeMealEditOpen(false);
+      navigate(`/recipes/${editingRecipeMeal.recipeId}`, {
+        state: {
+          from: 'calendar',
+          view,
+          date: currentDate.toISOString(),
+          plannedServings: editingRecipeMeal.servings,
+        },
+      });
+      setEditingRecipeMeal(null);
+    }
+  }, [editingRecipeMeal, navigate, view, currentDate]);
 
   const handlePrint = useCallback(() => {
     window.print();
@@ -524,6 +549,19 @@ export function CalendarPage() {
         onSave={handleFreeTextMealUpdate}
         meal={editingFreeTextMeal}
         mealSlots={mealSlots}
+      />
+
+      <RecipeMealEditModal
+        isOpen={recipeMealEditOpen}
+        onClose={() => {
+          setRecipeMealEditOpen(false);
+          setEditingRecipeMeal(null);
+        }}
+        onSave={handleRecipeMealUpdate}
+        onViewRecipe={handleViewRecipeFromModal}
+        meal={editingRecipeMeal}
+        mealSlots={mealSlots}
+        recipeName={editingRecipeMeal?.recipeId ? recipesById.get(editingRecipeMeal.recipeId)?.title || 'Recipe' : 'Recipe'}
       />
     </div>
   );
