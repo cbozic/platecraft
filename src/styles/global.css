@@ -82,6 +82,10 @@ button {
 }
 
 /* Print styles */
+@page {
+  margin: 0.75in;
+}
+
 @media print {
   body {
     background-color: white;
