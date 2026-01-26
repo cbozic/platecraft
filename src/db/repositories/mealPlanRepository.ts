@@ -1,7 +1,7 @@
 import { db } from '../database';
 import type { PlannedMeal, DayNote, RecurringMeal, MealExtraItem } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
-import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, parseISO } from 'date-fns';
 import { settingsRepository } from './settingsRepository';
 
 export const mealPlanRepository = {
@@ -30,6 +30,23 @@ export const mealPlanRepository = {
     const start = startOfMonth(date);
     const end = endOfMonth(date);
     return this.getMealsForDateRange(start, end);
+  },
+
+  async getRecipeUsageHistory(lookbackDays: number = 90): Promise<Map<string, Date>> {
+    const endDate = new Date();
+    const startDate = subDays(endDate, lookbackDays);
+    const meals = await this.getMealsForDateRange(startDate, endDate);
+
+    const usageMap = new Map<string, Date>();
+    for (const meal of meals) {
+      if (!meal.recipeId) continue; // Skip free-text meals
+      const mealDate = parseISO(meal.date);
+      const existing = usageMap.get(meal.recipeId);
+      if (!existing || mealDate > existing) {
+        usageMap.set(meal.recipeId, mealDate);
+      }
+    }
+    return usageMap;
   },
 
   async addMeal(

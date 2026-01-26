@@ -1,4 +1,4 @@
-import { format, eachDayOfInterval } from 'date-fns';
+import { format, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   MealPlanConfig,
@@ -15,7 +15,7 @@ import type {
 import type { Recipe, Ingredient, MealSlot, PlannedMeal } from '@/types';
 import { UNIT_INFO } from '@/types/units';
 import type { MeasurementUnit } from '@/types/units';
-import { recipeRepository } from '@/db';
+import { recipeRepository, mealPlanRepository } from '@/db';
 
 /**
  * Normalize ingredient name for matching
@@ -452,6 +452,52 @@ function pickRecipeWithFavoritesWeight(
 }
 
 /**
+ * Calculate recency scores from usage history
+ * Score ranges from 0 (just used) to 1 (not used recently or never used)
+ */
+function calculateRecencyScores(
+  usageHistory: Map<string, Date>,
+  lookbackDays: number = 90
+): Map<string, number> {
+  const today = new Date();
+  const scores = new Map<string, number>();
+
+  for (const [recipeId, lastUsedDate] of usageHistory) {
+    const daysSince = differenceInDays(today, lastUsedDate);
+    const cappedDays = Math.min(daysSince, lookbackDays);
+    scores.set(recipeId, cappedDays / lookbackDays); // 0 = just used, 1 = not used recently
+  }
+  return scores;
+}
+
+/**
+ * Pick a recipe using combined recency and favorites weighting
+ * Recipes not in recencyScores are treated as not recently used (score = 1)
+ */
+function pickRecipeWithRecencyWeight(
+  candidates: Recipe[],
+  favoritesWeight: number,
+  recencyScores: Map<string, number>
+): Recipe | null {
+  if (candidates.length === 0) return null;
+
+  // Calculate combined weights (recency + favorites)
+  const weighted = candidates.map(r => ({
+    recipe: r,
+    weight: (recencyScores.get(r.id) ?? 1) + (r.isFavorite ? favoritesWeight / 100 : 0)
+  }));
+
+  // Weighted random selection
+  const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
+  let random = Math.random() * totalWeight;
+  for (const { recipe, weight } of weighted) {
+    random -= weight;
+    if (random <= 0) return recipe;
+  }
+  return weighted[weighted.length - 1].recipe;
+}
+
+/**
  * Count how many of the configured tag names a recipe matches
  * Recipe.tags are now directly tag names (not IDs)
  */
@@ -472,7 +518,8 @@ function findTagMatchingRecipe(
   recipes: Recipe[],
   tagConfig: MealSlotTagConfig | undefined,
   usedRecipes: Set<string>,
-  favoritesWeight: number = 50
+  favoritesWeight: number = 50,
+  recencyScores: Map<string, number> = new Map()
 ): Recipe | null {
   if (!tagConfig || tagConfig.tags.length === 0) {
     return null;
@@ -502,42 +549,22 @@ function findTagMatchingRecipe(
     .filter((r) => r.tagMatchCount === maxTagMatches)
     .map((r) => r.recipe);
 
-  return pickRecipeWithFavoritesWeight(bestMatches, favoritesWeight);
+  return pickRecipeWithRecencyWeight(bestMatches, favoritesWeight, recencyScores);
 }
 
 /**
- * Find any unused recipe as fallback, weighted by favorites preference
+ * Find any unused recipe as fallback, weighted by favorites and recency
  */
 function findFallbackRecipe(
   recipes: Recipe[],
   usedRecipes: Set<string>,
-  favoritesWeight: number = 50
+  favoritesWeight: number = 50,
+  recencyScores: Map<string, number> = new Map()
 ): Recipe | null {
   const unused = recipes.filter((r) => !usedRecipes.has(r.id));
   if (unused.length === 0) return null;
 
-  const favorites = unused.filter((r) => r.isFavorite);
-  const nonFavorites = unused.filter((r) => !r.isFavorite);
-
-  // If no favorites or weight is 0, just pick randomly from all
-  if (favorites.length === 0 || favoritesWeight === 0) {
-    return unused[Math.floor(Math.random() * unused.length)];
-  }
-
-  // If weight is 100 or no non-favorites, always pick favorites
-  if (favoritesWeight === 100 || nonFavorites.length === 0) {
-    return favorites[Math.floor(Math.random() * favorites.length)];
-  }
-
-  // Use the weight to determine probability of picking a favorite
-  // Weight of 50 = equal chance, 100 = always favorites, 0 = never favorites
-  const pickFavorite = Math.random() * 100 < favoritesWeight;
-
-  if (pickFavorite) {
-    return favorites[Math.floor(Math.random() * favorites.length)];
-  } else {
-    return nonFavorites[Math.floor(Math.random() * nonFavorites.length)];
-  }
+  return pickRecipeWithRecencyWeight(unused, favoritesWeight, recencyScores);
 }
 
 /**
@@ -556,7 +583,8 @@ function findRecipeForReuse(
   recipes: Recipe[],
   usageTracker: RecipeUsageTracker,
   tagConfig: MealSlotTagConfig | undefined,
-  favoritesWeight: number = 50
+  favoritesWeight: number = 50,
+  recencyScores: Map<string, number> = new Map()
 ): Recipe | null {
   if (recipes.length === 0) return null;
 
@@ -584,13 +612,16 @@ function findRecipeForReuse(
     // Bonus for favorites (scaled by favoritesWeight)
     const isFavorite = recipe.isFavorite;
 
+    // Add historical recency bonus (0-10 scale, recipes not used in 90 days get max bonus)
+    const historicalRecency = (recencyScores.get(recipe.id) ?? 1) * 10;
+
     return {
       recipe,
       distance,
       tagMatchCount,
       isFavorite,
-      // Combined score: distance is primary, with bonus per tag matched and favorites bonus
-      score: distance * 10 + (tagMatchCount * 5) + (isFavorite ? favoritesBonus : 0),
+      // Combined score: distance is primary, with bonus per tag matched, favorites bonus, and historical recency
+      score: distance * 10 + (tagMatchCount * 5) + (isFavorite ? favoritesBonus : 0) + historicalRecency,
     };
   });
 
@@ -631,6 +662,10 @@ export async function generateMealPlan(
 
   // Get all recipes
   const allRecipes = await recipeRepository.getAll();
+
+  // Fetch historical usage (past 90 days) and calculate recency scores
+  const usageHistory = await mealPlanRepository.getRecipeUsageHistory(90);
+  const recencyScores = calculateRecencyScores(usageHistory, 90);
 
   if (allRecipes.length === 0) {
     warnings.push('No recipes found in your collection.');
@@ -720,15 +755,15 @@ export async function generateMealPlan(
         // First priority: recipes with the most tag matches
         const maxTagMatches = Math.max(...validCandidates.map((c) => c.tagMatchCount));
         if (maxTagMatches > 0) {
-          // Pick from candidates with the highest tag match count
+          // Pick from candidates with the highest tag match count, using recency as tiebreaker
           const bestTagMatches = validCandidates.filter((c) => c.tagMatchCount === maxTagMatches);
           const recipes = bestTagMatches.map((c) => c.recipe);
-          selectedRecipe = pickRecipeWithFavoritesWeight(recipes, config.favoritesWeight);
+          selectedRecipe = pickRecipeWithRecencyWeight(recipes, config.favoritesWeight, recencyScores);
           bestMatch = bestTagMatches.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
         } else {
-          // No tag matches, pick from all valid candidates using favorites weight
+          // No tag matches, pick from all valid candidates using recency weight
           const recipes = validCandidates.map((c) => c.recipe);
-          selectedRecipe = pickRecipeWithFavoritesWeight(recipes, config.favoritesWeight);
+          selectedRecipe = pickRecipeWithRecencyWeight(recipes, config.favoritesWeight, recencyScores);
           bestMatch = validCandidates.find((c) => c.recipe.id === selectedRecipe?.id)?.score || null;
         }
       }
@@ -770,7 +805,7 @@ export async function generateMealPlan(
     const tagConfig = getSlotTagConfig(config.weekdayConfigs, slot.dayOfWeek, slot.slotId);
 
     if (tagConfig && tagConfig.tags.length > 0) {
-      const recipe = findTagMatchingRecipe(allRecipes, tagConfig, usedRecipes, config.favoritesWeight);
+      const recipe = findTagMatchingRecipe(allRecipes, tagConfig, usedRecipes, config.favoritesWeight, recencyScores);
 
       if (recipe) {
         usedRecipes.add(recipe.id);
@@ -830,7 +865,7 @@ export async function generateMealPlan(
 
     // First try to find an unused recipe that matches tags (if tags configured)
     if (tagConfig && tagConfig.tags.length > 0) {
-      recipe = findTagMatchingRecipe(allRecipes, tagConfig, usedRecipes, config.favoritesWeight);
+      recipe = findTagMatchingRecipe(allRecipes, tagConfig, usedRecipes, config.favoritesWeight, recencyScores);
       if (recipe) {
         isTagMatch = true;
       } else {
@@ -842,12 +877,12 @@ export async function generateMealPlan(
 
     // If no tag match found, try any unused recipe
     if (!recipe) {
-      recipe = findFallbackRecipe(allRecipes, usedRecipes, config.favoritesWeight);
+      recipe = findFallbackRecipe(allRecipes, usedRecipes, config.favoritesWeight, recencyScores);
     }
 
     // If no unused recipes, find a recipe to reuse with maximum spacing
     if (!recipe && allRecipes.length > 0) {
-      recipe = findRecipeForReuse(allRecipes, usageTracker, tagConfig, config.favoritesWeight);
+      recipe = findRecipeForReuse(allRecipes, usageTracker, tagConfig, config.favoritesWeight, recencyScores);
       // Check if reused recipe matches tags (recipe.tags are names)
       if (recipe && configTagNamesLower.size > 0) {
         const recipeTagNamesLower = recipe.tags.map((name) => name.toLowerCase());
@@ -943,7 +978,7 @@ export async function generateMealPlan(
 /**
  * Find alternative recipes for swapping
  * tagConfig.tags and recipe.tags are both names
- * Returns recipes prioritized by tag matches, with non-matching recipes shuffled for variety
+ * Returns recipes prioritized by tag matches and recency (less recently used first)
  */
 export async function findAlternativeRecipes(
   currentRecipeId: string,
@@ -955,6 +990,10 @@ export async function findAlternativeRecipes(
 ): Promise<Recipe[]> {
   const allRecipes = await recipeRepository.getAll();
   const usedSet = new Set(usedRecipeIds);
+
+  // Fetch historical usage for recency weighting
+  const usageHistory = await mealPlanRepository.getRecipeUsageHistory(90);
+  const recencyScores = calculateRecencyScores(usageHistory, 90);
 
   // Filter out used recipes and current recipe to avoid duplicates
   const candidates = allRecipes.filter((r) => r.id !== currentRecipeId && !usedSet.has(r.id));
@@ -968,31 +1007,43 @@ export async function findAlternativeRecipes(
       tagConfig.tags.map((name) => name.toLowerCase())
     );
 
-    // Score each candidate by number of matching tags
+    // Score each candidate by number of matching tags and recency
     const scored = candidates.map((r) => ({
       recipe: r,
       tagMatchCount: countMatchingTagNames(r, configTagNamesLower),
+      recencyScore: recencyScores.get(r.id) ?? 1, // 1 = not used recently, good for variety
     }));
 
     // Separate tag-matching recipes from non-matching
     const tagMatching = scored.filter((s) => s.tagMatchCount > 0);
     const nonMatching = scored.filter((s) => s.tagMatchCount === 0);
 
-    // Sort tag-matching by match count descending
-    tagMatching.sort((a, b) => b.tagMatchCount - a.tagMatchCount);
+    // Sort tag-matching by match count descending, then by recency (less recently used first)
+    tagMatching.sort((a, b) => {
+      if (b.tagMatchCount !== a.tagMatchCount) {
+        return b.tagMatchCount - a.tagMatchCount;
+      }
+      return b.recencyScore - a.recencyScore; // Higher recency score = less recently used
+    });
 
-    // Shuffle non-matching for variety
-    const shuffledNonMatching = shuffleArray(nonMatching);
+    // Sort non-matching by recency (less recently used first)
+    nonMatching.sort((a, b) => b.recencyScore - a.recencyScore);
 
-    // Combine: tag-matching first, then shuffled non-matching
+    // Combine: tag-matching first, then non-matching (both sorted by recency within groups)
     const result = [
       ...tagMatching.map((s) => s.recipe),
-      ...shuffledNonMatching.map((s) => s.recipe),
+      ...nonMatching.map((s) => s.recipe),
     ];
 
     return result.slice(0, limit);
   }
 
-  // No tag config - return shuffled candidates for variety
-  return shuffleArray(candidates).slice(0, limit);
+  // No tag config - sort by recency (less recently used first)
+  const scored = candidates.map((r) => ({
+    recipe: r,
+    recencyScore: recencyScores.get(r.id) ?? 1,
+  }));
+  scored.sort((a, b) => b.recencyScore - a.recencyScore);
+
+  return scored.map((s) => s.recipe).slice(0, limit);
 }
