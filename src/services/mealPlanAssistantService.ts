@@ -420,38 +420,6 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 /**
- * Pick a recipe from candidates using favorites weight
- */
-function pickRecipeWithFavoritesWeight(
-  candidates: Recipe[],
-  favoritesWeight: number
-): Recipe | null {
-  if (candidates.length === 0) return null;
-
-  const favorites = candidates.filter((r) => r.isFavorite);
-  const nonFavorites = candidates.filter((r) => !r.isFavorite);
-
-  // If no favorites or weight is 0, pick randomly
-  if (favorites.length === 0 || favoritesWeight === 0) {
-    return candidates[Math.floor(Math.random() * candidates.length)];
-  }
-
-  // If weight is 100 or no non-favorites, always pick favorites
-  if (favoritesWeight === 100 || nonFavorites.length === 0) {
-    return favorites[Math.floor(Math.random() * favorites.length)];
-  }
-
-  // Use weight to determine probability
-  const pickFavorite = Math.random() * 100 < favoritesWeight;
-
-  if (pickFavorite) {
-    return favorites[Math.floor(Math.random() * favorites.length)];
-  } else {
-    return nonFavorites[Math.floor(Math.random() * nonFavorites.length)];
-  }
-}
-
-/**
  * Calculate recency scores from usage history
  * Score ranges from 0 (just used) to 1 (not used recently or never used)
  */
