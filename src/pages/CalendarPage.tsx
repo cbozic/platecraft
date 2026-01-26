@@ -353,7 +353,8 @@ export function CalendarPage() {
     if (view === 'month') {
       return format(currentDate, 'MMMM yyyy');
     }
-    return `Week of ${format(currentDate, 'MMM d, yyyy')}`;
+    const weekStart = startOfWeek(currentDate, { weekStartsOn });
+    return `Week of ${format(weekStart, 'MMM d, yyyy')}`;
   };
 
   return (
